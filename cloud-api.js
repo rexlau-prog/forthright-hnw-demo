@@ -53,12 +53,12 @@ export function createCloudApi(config, fetcher = fetch) {
     }
     if(path==='/data') {
       const [data,reference]=await Promise.all([rpc(path),catalog()]);
-      return {...data,catalog:reference.meta};
+      return {...data,catalog:reference.meta,securityNames:Object.fromEntries(reference.securities.filter(s=>s.market==='HK').map(s=>[s.symbol,{nameZhHant:s.nameZhHant,nameZhHans:s.nameZhHans,nameZh:s.nameZh}]))};
     }
     if(path.startsWith('/securities?')) {
       await accessToken();
       const p=new URLSearchParams(path.split('?')[1]),q=(p.get('q')??'').toLowerCase().slice(0,80),market=p.get('market'),type=p.get('type');
-      const results=(await catalog()).securities.filter(s=>(!market||s.market===market)&&(!type||s.type===type)&&(!q||`${s.symbol} ${s.name} ${s.nameZh??''}`.toLowerCase().includes(q)));
+      const results=(await catalog()).securities.filter(s=>(!market||s.market===market)&&(!type||s.type===type)&&(!q||`${s.symbol} ${s.name} ${s.nameZh??''} ${s.nameZhHant??''} ${s.nameZhHans??''}`.toLowerCase().includes(q)));
       const rank=s=>s.symbol.toLowerCase()===q?-3:s.symbol.toLowerCase().startsWith(q)?-1:0;
       results.sort((a,b)=>rank(a)-rank(b)||a.symbol.localeCompare(b.symbol));
       return {results:results.slice(0,40),total:results.length};

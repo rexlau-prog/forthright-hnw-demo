@@ -16,6 +16,18 @@ export function t(value){
  for(const [from,to] of phrases)text=text.replaceAll(from,to);
  return [...text].map(c=>characters[c]??c).join('');
 }
+// Tags are display labels: keep their IDs and stored spelling unchanged.
+const tagVariants=[['活躍','活跃'],['不配合','不配合'],['配合','配合'],['冷淡','冷淡'],['積極學習','积极学习'],['沒有回應','没有回应']];
+export function tagLabel(name){
+ const pair=tagVariants.find(pair=>pair.includes(name));
+ return pair?pair[selected==='zh-Hans'?1:0]:t(name);
+}
+// Resolve old saved holdings through the reference directory, never rewriting records.
+export function securityName(security,names={}){
+ if(security.market!=='HK'||security.manual)return security.name??'';
+ const reference=names[String(security.symbol).padStart(5,'0')]??security;
+ return (selected==='zh-Hans'?reference.nameZhHans:reference.nameZhHant)||reference.nameZh||security.name||'';
+}
 // Translate literal UI segments only, so interpolated names/notes are preserved exactly.
 export function ui(strings,...values){return strings.reduce((result,part,index)=>result+t(part)+(index<values.length?values[index]:''),'');}
 export function languageControl(){return `<label class="language-control"><span class="language-icon" aria-hidden="true">文</span><span class="sr-only">${t('介面語言')}</span><select id="language-select" aria-label="${t('介面語言')}"><option value="zh-Hant" ${selected==='zh-Hant'?'selected':''}>繁體中文</option><option value="zh-Hans" ${selected==='zh-Hans'?'selected':''}>简体中文</option></select></label>`;}
