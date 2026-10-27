@@ -1,5 +1,6 @@
 import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js';
 import {clientsCsv} from './export-csv.js';
+import {createQuoteCache,unrealizedPnl} from './holding-prices.js';
 import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js';
 setTextSize(textSize());
 const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
@@ -8,6 +9,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;'
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${({download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',tag:'<path d="M20 13 13 20a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a22 22 0 0 0 18 0M12 12v3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 5v14M5 12h14"/>',chevron:'<path d="m9 5 7 7-7 7"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',logout:'<path d="M9 21H3V3h6M9 12h12m-5-5 5 5-5 5"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',book:'<path d="M12 5v16M12 5C9 2 5 3 2 4v15c3-1 7-2 10 2 3-4 7-3 10-2V4c-3-1-7-2-10 1Z"/>',check:'<path d="m5 12 4 4L19 6"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>'})[name] ?? ''}</svg>`;
 const state = { user:null, demo:false, clients:[], tags:[], catalog:{}, securityNames:{}, view:'clients', query:'', tag:'', tier:'', market:'', page:1, expandedClients:new Set(), draft:null, securityResults:[], searchSeq:0, users:[] };
 let toastTimer, searchTimer;
+const quoteCache=createQuoteCache(symbols=>api('/quotes','POST',{symbols}));
 function toast(message) { $('#toast').textContent=t(message); $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000); }
 async function api(path, method='GET', body) {
  try {
@@ -18,7 +20,7 @@ async function api(path, method='GET', body) {
   return data;
  } catch(e) { if(e.status===401 && path!=='/login') { clearPrivateState(); $('#modal').close(); render(); } throw e; }
 }
-function clearPrivateState(){ Object.assign(state,{user:null,clients:[],tags:[],users:[],securityNames:{},draft:null,view:'clients',query:'',tag:'',tier:'',market:'',page:1,expandedClients:new Set()}); modal.innerHTML=''; }
+function clearPrivateState(){ quoteCache.clear();Object.assign(state,{user:null,clients:[],tags:[],users:[],securityNames:{},quotesEnabled:false,quoteConnection:null,draft:null,view:'clients',query:'',tag:'',tier:'',market:'',page:1,expandedClients:new Set()}); modal.innerHTML=''; }
 const formatDate = d => new Date(d).toLocaleDateString(locale(),{month:'short',day:'numeric'});
 const tagHtml = id => { const i=state.tags.findIndex(t=>t.id===id), t=state.tags[i]; return t?`<span class="tag t${i%6}" data-tag-color="${validTagColor(t.color)?t.color:''}">${esc(tagLabel(t.name))}</span>`:''; };
 const options = (items,value) => items.map(([v,label])=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(label)}</option>`).join('');
@@ -48,10 +50,27 @@ function clientsView(){
 }
 function filteredClients(){const q=state.query.trim().toLowerCase(); return state.clients.filter(c=>(!q||`${c.surname} ${c.last2} ${c.groupName} ${c.holdings.map(h=>`${h.symbol} ${h.name} ${securityName(h,state.securityNames)}`).join(' ')}`.toLowerCase().includes(q))&&(!state.tag||c.tags.includes(state.tag))&&(!state.tier||c.tier===state.tier)&&(!state.market||c.holdings.some(h=>h.market===state.market)));}
 function holdingValue(value){return value===''||value==null?t('未提供'):typeof value==='number'?value.toLocaleString(locale(),{maximumFractionDigits:20}):esc(value);}
+function money(value,currency,signed=false,precision=2){return `${esc(currency)} ${value.toLocaleString(locale(),{minimumFractionDigits:2,maximumFractionDigits:precision,signDisplay:signed?'exceptZero':'auto'})}`;}
+function holdingPrice(h){
+  const quote=quoteCache.read(h),pnl=unrealizedPnl(h,quote),available=quote.status==='available';
+  const reasons={'loading':t('載入報價中'),'not-configured':t('報價來源待接入'),'unsupported':t('此資產暫不支援報價'),'unavailable':t('暫無報價')};
+  const pnlReasons={'missing-position':t('請補充數量及平均成本'),'currency-mismatch':t('成本與報價幣種不同'),'invalid-position':t('請檢查持倉數值'),'no-quote':reasons[quote.status]||t('暫無報價')};
+  const change=pnl.status==='available'?`${money(pnl.amount,pnl.currency,true)}<small>${pnl.percent===null?t('回報率 —'):pnl.percent.toLocaleString(locale(),{minimumFractionDigits:2,maximumFractionDigits:2,signDisplay:'exceptZero'})+'%'}</small>`:`<span class="holding-price-empty">—<small>${pnlReasons[pnl.status]}</small></span>`;
+  const timing=available?`${quote.session==='closed'?t('收市價'):quote.delayMinutes===null?t('報價延遲未確認'):quote.delayMinutes===0?t('即時報價'):ui`${quote.delayMinutes} 分鐘延遲`} · ${new Date(quote.asOf).toLocaleString(locale(),{timeZone:'Asia/Hong_Kong',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} HKT · ${esc(quote.source)}`:reasons[quote.status];
+  return ui`<dl class="holding-prices"><div><dt>現價</dt><dd>${available?money(quote.price,quote.currency,false,6):`<span class="holding-price-empty">—</span>`}</dd></div><div><dt>未實現盈虧</dt><dd class="${pnl.status==='available'?(pnl.amount>0?'pnl-gain':pnl.amount<0?'pnl-loss':''):''}">${change}</dd></div></dl><p class="holding-quote-time">${timing}</p>`;
+}
+function expandedHoldings(){return state.clients.filter(c=>state.expandedClients.has(c.id)&&document.getElementById(`client-holdings-${c.id}`)).flatMap(c=>c.holdings);}
+function renderHoldingPrices(){for(const el of document.querySelectorAll('[data-holding-prices]')){const client=state.clients.find(c=>c.id===el.dataset.clientId),holding=client?.holdings[Number(el.dataset.holdingPrices)];if(holding)el.innerHTML=holdingPrice(holding);}}
+async function loadHoldingPrices(force=false){
+  if(!state.user||!state.quotesEnabled||state.view!=='clients'||document.hidden)return;
+  const holdings=expandedHoldings();if(!holdings.length)return;
+  const identity=state.user.id,work=quoteCache.load(holdings,{force});renderHoldingPrices();await work;
+  if(state.user?.id===identity&&state.view==='clients')renderHoldingPrices();
+}
 function clientHoldings(c){
   return ui`<section class="client-holdings" aria-label="${esc(c.surname)} · ${t('全部持倉')}">
-    <div class="client-holdings-head"><div><h3>全部持倉 <span class="pill">${c.holdings.length} 項資產</span></h3><small>依團隊最新儲存記錄顯示</small></div><button type="button" class="btn small" data-action="edit-client" data-id="${esc(c.id)}">查看／編輯客戶 ${icon('chevron')}</button></div>
-    ${c.holdings.length?`<div class="client-holdings-grid">${c.holdings.map(h=>ui`<article class="client-holding"><div class="client-holding-title"><strong>${esc(h.symbol)}</strong><span class="tier">${marketLabels[h.market]||esc(h.market)}</span></div><div class="client-holding-name">${esc(securityName(h,state.securityNames))}</div><dl><div><dt>數量 / 單位</dt><dd>${holdingValue(h.quantity)}</dd></div><div><dt>平均成本 / 單位</dt><dd>${h.avgCost===''||h.avgCost==null?t('未提供'):`${esc(h.currency||'')} ${holdingValue(h.avgCost)}`}</dd></div></dl>${h.notes?`<p class="client-holding-notes">${esc(h.notes)}</p>`:''}</article>`).join('')}</div>`:t('<p class="client-holdings-empty">尚未記錄持倉，可在客戶檔案新增。</p>')}
+    <div class="client-holdings-head"><div><h3>全部持倉 <span class="pill">${c.holdings.length} 項資產</span></h3><small>依團隊最新儲存記錄顯示${state.quotesEnabled?t(' · 報價快取 30 分鐘；盈虧未計交易費用及派息'):''}</small></div><div class="holding-actions">${state.quotesEnabled&&c.holdings.length?ui`<button type="button" class="btn small" data-action="refresh-prices">${icon('refresh')} 更新報價</button>`:''}<button type="button" class="btn small" data-action="edit-client" data-id="${esc(c.id)}">查看／編輯客戶 ${icon('chevron')}</button></div></div>
+    ${c.holdings.length?`<div class="client-holdings-grid">${c.holdings.map((h,index)=>ui`<article class="client-holding"><div class="client-holding-title"><strong>${esc(h.symbol)}</strong><span class="tier">${marketLabels[h.market]||esc(h.market)}</span></div><div class="client-holding-name">${esc(securityName(h,state.securityNames))}</div><dl><div><dt>數量 / 單位</dt><dd>${holdingValue(h.quantity)}</dd></div><div><dt>平均成本 / 單位</dt><dd>${h.avgCost===''||h.avgCost==null?t('未提供'):`${esc(h.currency||'')} ${holdingValue(h.avgCost)}`}</dd></div></dl>${state.quotesEnabled?`<div data-holding-prices="${index}" data-client-id="${esc(c.id)}">${holdingPrice(h)}</div>`:''}${h.notes?`<p class="client-holding-notes">${esc(h.notes)}</p>`:''}</article>`).join('')}</div>`:t('<p class="client-holdings-empty">尚未記錄持倉，可在客戶檔案新增。</p>')}
   </section>`;
 }
 function clientRows(c){
@@ -76,6 +95,7 @@ function renderClientRows(){
   $('#filter-count').textContent=ui`顯示 ${list.length} 位客戶，共 ${state.clients.length} 位`;
   $('#client-results').innerHTML=list.length?ui`<div class="table-wrap"><table><thead><tr><th>客戶</th><th>服務群組 / 級別</th><th>客戶標籤</th><th>持倉摘要</th><th>最後更新</th><th></th></tr></thead><tbody>${list.slice((state.page-1)*10,state.page*10).map(clientRows).join('')}</tbody></table></div><div class="table-footer"><span>每頁 10 位客戶</span><div class="pagination"><button class="btn" data-action="prev" ${state.page===1?'disabled':''} aria-label="上一頁">‹</button><span>${state.page} / ${pages}</span><button class="btn" data-action="next" ${state.page===pages?'disabled':''} aria-label="下一頁">›</button></div></div>`:`<div class="empty">${icon('users')}<h3>${state.clients.length?t('沒有符合條件的客戶'):t('開始建立客戶關係')}</h3><p>${state.clients.length?t('試試其他關鍵字，或清除目前的篩選。'):t('新增姓氏、WhatsApp 尾兩碼，再加入標籤與持倉。')}</p><button class="btn primary" data-action="${state.clients.length?'clear-filters':'new-client'}">${state.clients.length?t('清除篩選'):t('新增第一位客戶')}</button></div>`;
   applyTagColors();
+  void loadHoldingPrices();
 }
 function openClient(id){
   state.draft=id?structuredClone(state.clients.find(c=>c.id===id)):{surname:'',last2:'',groupName:'',tier:'鑽石',tags:[],holdings:[],notes:''};
@@ -110,7 +130,12 @@ function allHoldings(){const map=new Map();for(const c of state.clients)for(cons
 function holdingsView(){const list=allHoldings();return ui`${pageHeading('PORTFOLIO COVERAGE',t('持倉總覽'),t('按資產查看持有客戶，快速掌握團隊的服務覆蓋範圍。'))}<section class="stats">${stat(t('資產種類'),list.length,t('按市場及代號去重'),'briefcase')}${['US','HK','Others'].map(m=>stat(marketLabels[m],list.filter(h=>h.market===m).length,t('已記錄的資產種類'),'book')).join('')}</section><section class="panel"><div class="panel-title"><h2>團隊客戶持倉</h2><span class="pill">按持有客戶數排序</span></div>${list.length?ui`<div class="table-wrap"><table><thead><tr><th>資產</th><th>市場</th><th>類型</th><th>持有客戶</th><th></th></tr></thead><tbody>${list.map(h=>ui`<tr><td><strong>${esc(h.symbol)}</strong><div class="subline">${esc(securityName(h,state.securityNames))}</div></td><td>${marketLabels[h.market]}</td><td><span class="symbol">${esc(h.type)}</span></td><td>${h.owners.size} 位</td><td><button class="text-btn" data-action="filter-symbol" data-id="${esc(h.symbol)}">查看客戶 →</button></td></tr>`).join('')}</tbody></table></div>`:t('<div class="empty"><h3>尚未記錄任何持倉</h3><p>在客戶檔案加入持倉後，這裡會顯示資產與持有客戶數。</p></div>')}</section><div class="bottom-note">僅整理團隊手動記錄的持倉，不代表完整資產或即時市值。</div>`;}
 function catalogView(){const counts=state.catalog.counts||{};return ui`${pageHeading('SECURITIES REFERENCE',t('證券目錄'),t('搜尋美股、港股及 ETF，亦可在客戶檔案手動加入目錄以外的資產。'))}<div class="catalog-grid">${[['US',t('美國市場'),t('Nasdaq Trader · Nasdaq / NYSE / NYSE American / 其他上市市場')],['HK',t('香港市場'),t('HKEX · 股票、ETF、REIT 及上市基金')]].map(([m,l,src])=>ui`<div class="catalog-card"><div class="eyebrow">${m} SECURITIES</div><h3>${l}</h3><div class="catalog-number">${(counts[m]?.total||0).toLocaleString()} <small>項證券</small></div><p>其中 ${(counts[m]?.ETF||0).toLocaleString()} 項 ETF<br>${src}<br>資料日期 ${esc(state.catalog.asOf||t('未載入'))}</p></div>`).join('')}</div><section class="panel"><div class="panel-title"><h2>查找證券</h2><span class="pill">交易所參考目錄</span></div><div class="catalog-search"><div class="search-controls"><select id="catalog-market" aria-label="目錄市場"><option value="US">美股 US</option><option value="HK">港股 HK</option></select><select id="catalog-type" aria-label="目錄類型"><option value="">所有類型</option><option value="STOCK">股票</option><option value="ETF">ETF</option><option value="FUND">基金 / REIT</option></select><input id="catalog-query" aria-label="搜尋證券目錄" placeholder="輸入代號或名稱"></div><div id="catalog-results" class="search-results"><small>輸入代號或名稱開始搜尋。</small></div></div></section><div class="bottom-note"><span>目錄為定期快照，不含即時價格。新上市、下市及特殊資產可手動記錄。</span><span>來源：<a href="https://www.nasdaqtrader.com/trader.aspx?id=symboldirdefs" target="_blank" rel="noreferrer">Nasdaq Trader</a> · <a href="https://www.hkex.com.hk/Services/Trading/Securities/Securities-Lists?sc_lang=en" target="_blank" rel="noreferrer">HKEX</a></span></div>`;}
 async function searchCatalog(){const seq=++state.searchSeq,q=$('#catalog-query').value;const data=await api(`/securities?market=${$('#catalog-market').value}&type=${$('#catalog-type').value}&q=${encodeURIComponent(q)}`);if(seq!==state.searchSeq||!$('#catalog-results'))return;$('#catalog-results').innerHTML=ui`<small>找到 ${data.total} 項${data.total>40?t('，顯示首 40 項，請收窄搜尋'):''}</small>`+data.results.map(s=>`<div class="security-result"><span><strong>${esc(s.symbol)}</strong><small>${esc(securityName(s))}</small></span><span class="pill">${s.type} · ${s.currency}</span></div>`).join('');}
-function teamView(){return ui`${pageHeading('ACCESS MANAGEMENT',t('團隊帳號'),t('每位同事使用自己的帳號；管理員可建立或停用存取權。'),ui`<button class="btn primary" data-action="new-user">${icon('plus')} 新增團隊帳號</button>`)}<section class="panel"><div class="panel-title"><h2>團隊成員</h2><span class="pill">僅管理員可管理</span></div><div class="table-wrap"><table class="team-table"><thead><tr><th>帳號</th><th>權限</th><th>狀態</th><th>管理</th></tr></thead><tbody>${state.users.map(u=>`<tr><td><strong>${esc(u.username)}</strong>${u.id===state.user.id?t(' <small>（你）</small>'):''}</td><td>${u.role==='admin'?t('管理員'):t('團隊成員')}</td><td><span class="tag ${u.active?'':'t1'}">${u.active?t('使用中'):t('已停用')}</span></td><td>${u.id===state.user.id?t('<button class="text-btn" data-action="password">更改密碼</button>'):ui`<button class="text-btn" data-action="toggle-user" data-id="${u.id}">${u.active?t('停用帳號'):t('啟用帳號')}</button><button class="text-btn" data-action="reset-user" data-id="${u.id}">重設密碼</button>`}</td></tr>`).join('')}</tbody></table></div></section><div class="notice">團隊成員可查看和編輯所有客戶、標籤與持倉；管理員另可管理帳號。停用帳號或重設密碼後，該帳號現有登入會立即失效。</div>`;}
+function quoteConnectionPanel(){
+  const c=state.quoteConnection;
+  if(!state.cloud||!c?.configured)return '';
+  return ui`<section class="panel quote-connection"><div class="panel-title"><h2>持倉參考報價</h2><span class="pill">${c.connected?t('已連接'):t('未連接')}</span></div><p>${c.connected?t('伺服器按需要擷取港股及美股報價，全團隊共用 30 分鐘快取；毋須開啟你的電腦。交易所報價時間會顯示在每項持倉內。'):c.unavailable?t('報價服務暫時無法連線。現價及盈虧暫不顯示。'):t('連接富途報價後，展開客戶即可查看參考價及未實現盈虧。只需要 quote:read 報價權限。')}</p><button class="btn" data-action="connect-quotes">${c.connected?t('重新連接富途報價'):t('連接富途報價')}</button></section>`;
+}
+function teamView(){return ui`${pageHeading('ACCESS MANAGEMENT',t('團隊帳號'),t('每位同事使用自己的帳號；管理員可建立或停用存取權。'),ui`<button class="btn primary" data-action="new-user">${icon('plus')} 新增團隊帳號</button>`)}<section class="panel"><div class="panel-title"><h2>團隊成員</h2><span class="pill">僅管理員可管理</span></div><div class="table-wrap"><table class="team-table"><thead><tr><th>帳號</th><th>權限</th><th>狀態</th><th>管理</th></tr></thead><tbody>${state.users.map(u=>`<tr><td><strong>${esc(u.username)}</strong>${u.id===state.user.id?t(' <small>（你）</small>'):''}</td><td>${u.role==='admin'?t('管理員'):t('團隊成員')}</td><td><span class="tag ${u.active?'':'t1'}">${u.active?t('使用中'):t('已停用')}</span></td><td>${u.id===state.user.id?t('<button class="text-btn" data-action="password">更改密碼</button>'):ui`<button class="text-btn" data-action="toggle-user" data-id="${u.id}">${u.active?t('停用帳號'):t('啟用帳號')}</button><button class="text-btn" data-action="reset-user" data-id="${u.id}">重設密碼</button>`}</td></tr>`).join('')}</tbody></table></div></section><div class="notice">團隊成員可查看和編輯所有客戶、標籤與持倉；管理員另可管理帳號。停用帳號或重設密碼後，該帳號現有登入會立即失效。</div>${quoteConnectionPanel()}`;}
 function tagModal(id,quick=false){const tag=state.tags.find(t=>t.id===id);state.tagModal={id,quick};const color=validTagColor(tag?.color)?tag.color:tagPalette[0];showModal(ui`<form data-form="tag">${modalHead(tag?t('編輯標籤'):t('新增標籤'))}<div class="modal-body"><div class="field"><label for="tag-name">標籤名稱</label><input id="tag-name" maxlength="24" required value="${esc(tag?.name||'')}" placeholder="例如：需要跟進"></div><div class="field"><label for="tag-color">標籤顏色</label><div class="tag-color-editor"><input type="color" id="tag-color" value="${color}" aria-label="${t('自訂標籤顏色')}"><span id="tag-preview" class="tag" data-tag-color="${color}">${esc(tagLabel(tag?.name||t('標籤預覽')))}</span></div><div class="color-palette" role="group" aria-label="${t('常用顏色')}">${tagPalette.map(c=>`<button type="button" class="color-swatch" data-action="tag-color" data-color="${c}" data-tag-color="${c}" aria-label="${t('選擇顏色')} ${c}" aria-pressed="${c===color}">${c===color?'✓':''}</button>`).join('')}</div><small>可選擇常用顏色，或點選色塊自訂。儲存後全團隊可見。</small></div>${errorBlock}</div><div class="modal-actions"><button type="button" class="btn" data-action="${quick?'return-client':'close'}">取消</button><button class="btn primary" type="submit">儲存標籤</button></div></form>`);}
 function updateTagPreview(){const color=$('#tag-color')?.value;if(!validTagColor(color))return;const preview=$('#tag-preview');preview.dataset.tagColor=color;preview.textContent=tagLabel($('#tag-name').value||t('標籤預覽'));for(const b of document.querySelectorAll('.color-swatch')){b.setAttribute('aria-pressed',String(b.dataset.color===color));b.textContent=b.dataset.color===color?'✓':'';}applyTagColors();}
 
@@ -124,6 +149,7 @@ document.addEventListener('click',async e=>{
     if(a==='nav'){await load();state.view=id;if(id==='team')state.users=(await api('/team')).users;render();}
     if(a==='new-client')openClient();
     if(a==='toggle-client')toggleClient(id);
+    if(a==='refresh-prices'){b.disabled=true;try{await loadHoldingPrices(true);}finally{if(b.isConnected)b.disabled=false;}}
     if(a==='edit-client')openClient(id);
     if(a==='close')modal.close();
     if(a==='return-client')renderClientModal();
@@ -148,6 +174,14 @@ document.addEventListener('click',async e=>{
     if(a==='add-manual-security'){const symbol=$('#manual-symbol').value.trim(),name=$('#manual-name').value.trim(),market=$('#security-market').value;if(!symbol||!name)throw new Error(t('請填寫代號及資產名稱'));addHolding({symbol:symbol.toUpperCase(),name,market,type:market==='Others'?'OTHER':'UNVERIFIED',manual:true,currency:market==='HK'?'HKD':'USD'});}
     if(a==='remove-holding'){state.draft.holdings.splice(Number(b.dataset.index),1);updateHoldingsEditor();}
     if(a==='delete-client'){if(!confirm(ui`確定永久刪除 ${state.draft.surname} · ${state.draft.last2} 及其持倉？`))return;await api(`/clients/${state.draft.id}`,'DELETE',{version:state.draft.version});modal.close();await load();render();toast(t('已刪除客戶'));}
+    if(a==='connect-quotes'){
+      b.disabled=true;
+      try {
+        const {authorizeUrl}=await api('/quote-connect','POST',{}),url=new URL(authorizeUrl);
+        if(url.origin!=='https://webapi.futunn.com'||url.pathname!=='/oauth2/authorize/confirm')throw new Error(t('授權連結不正確'));
+        showModal(ui`${modalHead(t('連接富途報價'))}<div class="modal-body"><p>在富途頁面只選擇 <strong>quote:read</strong>（讀取報價）。完成後關閉授權分頁，回到本頁即可。</p><p>連接會讓方德後端取得報價，並以加密方式保存授權。你的電腦可以關閉。</p><a class="btn primary" href="${esc(url.href)}" target="_blank" rel="noopener noreferrer">前往富途授權</a></div><div class="modal-actions"><button class="btn" data-action="close">完成／關閉</button></div>`);
+      } finally{if(b.isConnected)b.disabled=false;}
+    }
     if(a==='new-user')userModal();
     if(a==='reset-user')userModal(id);
     if(a==='toggle-user'){const u=state.users.find(x=>x.id===id);await api(`/team/${id}`,'PUT',{active:!u.active});state.users=(await api('/team')).users;render();toast(u.active?t('已停用帳號'):t('已啟用帳號'));}
@@ -199,8 +233,11 @@ let syncing=false;
 async function syncShared(){
  if(!cloudApi||!state.user||document.hidden||modal.open||syncing||document.activeElement?.matches('input,textarea,select'))return;
  syncing=true;const identity=state.user.id;
- try{const data=await api('/data');if(state.user?.id!==identity)return;const changed=JSON.stringify([state.clients,state.tags])!==JSON.stringify([data.clients,data.tags]);Object.assign(state,data);if(changed&& !modal.open)render();const status=$('#sync-status');if(status)status.textContent=t('共享資料 · 已同步 ')+new Date().toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});}
+ try{const data=await api('/data');if(state.user?.id!==identity)return;const changed=JSON.stringify([state.clients,state.tags,state.quotesEnabled,state.quoteConnection])!==JSON.stringify([data.clients,data.tags,data.quotesEnabled,data.quoteConnection]);Object.assign(state,data);if(changed&& !modal.open)render();const status=$('#sync-status');if(status)status.textContent=t('共享資料 · 已同步 ')+new Date().toLocaleTimeString(locale(),{hour:'2-digit',minute:'2-digit'});}
  catch(e){const status=$('#sync-status');if(status)status.textContent=t('同步暫停 · 請重新整理');}
  finally{syncing=false;}
 }
 if(cloudApi){setInterval(syncShared,15000);window.addEventListener('focus',syncShared);document.addEventListener('visibilitychange',syncShared);}
+setInterval(()=>void loadHoldingPrices(),60_000);
+window.addEventListener('focus',()=>void loadHoldingPrices());
+document.addEventListener('visibilitychange',()=>void loadHoldingPrices());

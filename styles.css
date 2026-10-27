@@ -42,7 +42,15 @@
 .client-holding dl>div{display:flex;justify-content:space-between;gap:16px;align-items:baseline}
 .client-holding dt{color:#849189;font-size:calc(10px * var(--text-scale,1))}
 .client-holding dd{margin:0;text-align:right;font-size:calc(12px * var(--text-scale,1));font-variant-numeric:tabular-nums}
+.holding-actions{display:flex;flex-wrap:wrap;gap:8px}
+.client-holding .holding-prices{margin-top:12px;padding-top:12px;border-top:1px solid #edf0eb;gap:9px}
+.holding-prices small{display:block;margin-top:3px;font-size:calc(10px * var(--text-scale,1));font-weight:400}
+.holding-price-empty{color:#7c8e82;font-weight:400}
+.holding-prices .pnl-gain{color:#19734f;font-weight:600}
+.holding-prices .pnl-loss{color:#b43636;font-weight:600}
+.holding-quote-time{margin:10px 0 0;color:#78887e;font-size:calc(9px * var(--text-scale,1));line-height:1.6}
 .client-holding-notes{margin:15px 0 0;padding-top:12px;border-top:1px solid #edf0eb;color:#718177;font-size:calc(11px * var(--text-scale,1));line-height:1.7;white-space:pre-wrap}
 .client-holdings-empty{margin:0;color:#7c8e82;line-height:1.8}
 @media(max-width:800px){.client-holdings{padding:18px}.client-holdings-head{align-items:flex-start;flex-wrap:wrap}.client-holdings-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}}
 @media(prefers-reduced-motion:reduce){.client-expand-icon{transition:none}}
+.quote-connection{margin-top:24px;padding:24px}.quote-connection p{max-width:780px;color:var(--muted);line-height:1.7}.quote-connection .panel-title{padding:0;border:0}
