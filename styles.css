@@ -61,3 +61,5 @@
 
 .recommendation-sync{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 24px;margin:0 0 20px;padding:14px 18px;background:#edf2ed;border:1px solid #dce5dc;border-radius:10px;color:#456453;font-size:calc(12px * var(--text-scale,1));line-height:1.7}
 .recommendation-sync>span{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.recommendation-sync time{font-variant-numeric:tabular-nums;font-weight:600}.recommendation-sync small{font-size:calc(11px * var(--text-scale,1));color:#63786a}
+
+.recommendation-sync-main{display:flex;align-items:center;flex-wrap:wrap;gap:12px 18px}.recommendation-sync-main>span{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.recommendation-sync>small{flex-basis:100%}.recommendation-sync button{white-space:nowrap}
