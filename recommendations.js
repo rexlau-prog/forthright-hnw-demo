@@ -14,3 +14,10 @@ export function recommendationPerformance(record,quote){
  if(quote?.status!=='available'||!Number.isFinite(quote.price)||quote.price<0||quote.currency!==record.currency||!(record.entry>0))return null;
  return {change:quote.price-record.entry,percent:(quote.price/record.entry-1)*100};
 }
+
+export function recommendationSyncTime(sync,locale='zh-HK'){
+ const value=sync?.lastSuccessAt;
+ if(typeof value!=='string'||!Number.isFinite(Date.parse(value)))return null;
+ const date=new Date(value);
+ return {iso:date.toISOString(),display:date.toLocaleString(locale,{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' HKT'};
+}

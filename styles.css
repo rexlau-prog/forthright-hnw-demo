@@ -58,3 +58,6 @@
 .recommendations-table{min-width:1080px}.recommendations-table td{vertical-align:top}.recommendations-table td>small,.recommendation-price>small{display:block;margin-top:5px}.recommendation-price{min-width:165px}.recommendation-price>span{display:block;margin-top:6px;font-weight:600}.recommendation-price small{font-size:.7rem;color:var(--muted);font-weight:400}.recommendation-remarks{white-space:pre-wrap;min-width:230px;max-width:350px;font-size:.82rem;line-height:1.65}.recommendations-table th{white-space:nowrap}
 
 .recommendation-price .pnl-gain{color:#19734f;font-weight:600}.recommendation-price .pnl-loss{color:#b43636;font-weight:600}
+
+.recommendation-sync{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px 24px;margin:0 0 20px;padding:14px 18px;background:#edf2ed;border:1px solid #dce5dc;border-radius:10px;color:#456453;font-size:calc(12px * var(--text-scale,1));line-height:1.7}
+.recommendation-sync>span{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.recommendation-sync time{font-variant-numeric:tabular-nums;font-weight:600}.recommendation-sync small{font-size:calc(11px * var(--text-scale,1));color:#63786a}
