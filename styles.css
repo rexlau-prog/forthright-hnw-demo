@@ -54,3 +54,7 @@
 @media(max-width:800px){.client-holdings{padding:18px}.client-holdings-head{align-items:flex-start;flex-wrap:wrap}.client-holdings-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr))}}
 @media(prefers-reduced-motion:reduce){.client-expand-icon{transition:none}}
 .quote-connection{margin-top:24px;padding:24px}.quote-connection p{max-width:780px;color:var(--muted);line-height:1.7}.quote-connection .panel-title{padding:0;border:0}
+
+.recommendations-table{min-width:1080px}.recommendations-table td{vertical-align:top}.recommendations-table td>small,.recommendation-price>small{display:block;margin-top:5px}.recommendation-price{min-width:165px}.recommendation-price>span{display:block;margin-top:6px;font-weight:600}.recommendation-price small{font-size:.7rem;color:var(--muted);font-weight:400}.recommendation-remarks{white-space:pre-wrap;min-width:230px;max-width:350px;font-size:.82rem;line-height:1.65}.recommendations-table th{white-space:nowrap}
+
+.recommendation-price .pnl-gain{color:#19734f;font-weight:600}.recommendation-price .pnl-loss{color:#b43636;font-weight:600}
