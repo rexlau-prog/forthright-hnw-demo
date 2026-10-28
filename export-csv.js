@@ -1,4 +1,4 @@
-import {t,tagLabel,securityName} from './language.js?v=89771e12226a30da';
+import {t,tagLabel,securityName} from './language.js?v=fd052f323a77b1b2';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
