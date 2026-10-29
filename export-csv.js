@@ -1,6 +1,6 @@
-import {t,tagLabel,securityName} from './language.js?v=0c76009c465500e9';
-import {unrealizedPnl} from './holding-prices.js?v=0c76009c465500e9';
-import {recommendationPerformance} from './recommendations.js?v=0c76009c465500e9';
+import {t,tagLabel,securityName} from './language.js?v=8455c4913abaa648';
+import {unrealizedPnl} from './holding-prices.js?v=8455c4913abaa648';
+import {recommendationPerformance} from './recommendations.js?v=8455c4913abaa648';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
@@ -25,23 +25,47 @@ function quoteValues(quote){
     ['','','','',t(status),'',''];
 }
 const csv=rows=>'\uFEFF'+rows.map(row=>row.map(value=>csvCell(value)).join(',')).join('\r\n')+'\r\n';
+function clientTags(client,tags){
+  const byId=new Map(tags.map(tag=>[tag.id,tag]));
+  const assigned=(client.tags??[]).map(id=>byId.get(id)??{id,name:'',color:''});
+  return {
+    names:assigned.map(tag=>tag.name?tagLabel(tag.name):tag.id).join(' / '),
+    colors:assigned.filter(tag=>/^#[0-9a-f]{6}$/i.test(tag.color)).map(tag=>`${tag.name?tagLabel(tag.name):tag.id}=${tag.color}`).join(' / '),
+    ids:assigned.map(tag=>tag.id).join(' / '),
+    rawNames:assigned.map(tag=>tag.name).join(' / '),
+    raw:JSON.stringify(assigned.map(({id,name,color})=>({id,name,color:color??''})))
+  };
+}
+
+// A directory with exactly one row per client, including clients with no holdings.
+// Individual costs, quantities, notes and quote snapshots belong to the detail CSV.
+export function clientSummaryCsv(clients,tags,names={}, {exportedAt=new Date().toISOString()}={}){
+  const labels=['客戶編號','客戶姓氏','WhatsApp 尾兩碼','服務群組','會員級別','客戶標籤','標籤顏色（標籤=HEX）','團隊備註','最後更新時間','最後更新時間（香港時間）','更新同事','客戶資料版本','標籤編號','原始標籤名稱','標籤原始資料（JSON）','客戶持倉總數','全部持倉清單','匯出時間（香港時間）'];
+  const rows=[labels.map(label=>csvCell(t(label))).join(',')];
+  for(const client of clients){
+    const tag=clientTags(client,tags),holdings=client.holdings??[];
+    const values=[client.id,client.surname,client.last2,client.groupName,t(client.tier),tag.names,tag.colors,client.notes,client.updatedAt,hongKongTime(client.updatedAt),client.updatedBy,client.version,tag.ids,tag.rawNames,tag.raw,holdings.length,holdings.map(h=>`${h.market}.${h.symbol}${securityName(h,names)?' · '+securityName(h,names):''}`).join('\n'),hongKongTime(exportedAt)];
+    rows.push(values.map((value,i)=>csvCell(value,i===2)).join(','));
+  }
+  return '\uFEFF'+rows.join('\r\n')+'\r\n';
+}
 
 export function clientsCsv(clients,tags,names={}, {quoteFor=()=>null,exportedAt=new Date().toISOString()}={}){
   const labels=['客戶編號','客戶姓氏','WhatsApp 尾兩碼','服務群組','會員級別','客戶標籤','持倉市場','持倉代號','資產名稱','資產類型','幣種','數量','平均成本','持倉備註','團隊備註','最後更新時間','更新同事'];
   labels.push('標籤顏色（標籤=HEX）',...quoteLabels,'未實現盈虧','未實現盈虧（%）','盈虧幣種','盈虧狀態','匯出時間（香港時間）');
+  labels.push('客戶資料版本','標籤編號','原始標籤名稱','標籤原始資料（JSON）','持倉編號','客戶持倉總數','持倉次序','市場代碼','原始資產名稱','手動輸入資產','最後更新時間（香港時間）');
   const rows=[labels.map(label=>csvCell(t(label))).join(',')];
-  const tagNames=new Map(tags.map(tag=>[tag.id,tagLabel(tag.name)]));
-  const tagColors=new Map(tags.filter(tag=>/^#[0-9a-f]{6}$/i.test(tag.color)).map(tag=>[tag.id,tag.color]));
   for(const client of clients){
+    const tag=clientTags(client,tags),holdings=client.holdings??[];
     // A client without holdings still appears once; multiple holdings get separate rows.
-    for(const holding of client.holdings.length?client.holdings:[{}]){
+    for(const [index,holding] of (holdings.length?holdings:[{}]).entries()){
       const market={US:t('美股'),HK:t('港股'),Others:t('其他資產')}[holding.market]??'';
-      const values=[client.id,client.surname,client.last2,client.groupName,t(client.tier),client.tags.map(id=>tagNames.get(id)).filter(Boolean).join(' / '),market,holding.symbol,securityName(holding,names),holding.type,holding.currency,holding.quantity,holding.avgCost,holding.notes,client.notes,client.updatedAt,client.updatedBy];
-      const colors=client.tags.filter(id=>tagNames.has(id)&&tagColors.has(id)).map(id=>`${tagNames.get(id)}=${tagColors.get(id)}`).join(' / ');
+      const values=[client.id,client.surname,client.last2,client.groupName,t(client.tier),tag.names,market,holding.symbol,securityName(holding,names),holding.type,holding.currency,holding.quantity,holding.avgCost,holding.notes,client.notes,client.updatedAt,client.updatedBy];
       const quote=holding.symbol?quoteFor(holding):null,pnl=unrealizedPnl(holding,quote);
       const pnlStatus={'available':'可用','no-quote':'暫無報價','missing-position':'請補充數量及平均成本','currency-mismatch':'成本與報價幣種不同','invalid-position':'請檢查持倉數值'};
-      values.push(colors,...(holding.symbol?quoteValues(quote):quoteLabels.map(()=>'')),
+      values.push(tag.colors,...(holding.symbol?quoteValues(quote):quoteLabels.map(()=>'')),
         rounded(pnl.amount),rounded(pnl.percent),pnl.currency??'',holding.symbol?t(pnlStatus[pnl.status]):'',hongKongTime(exportedAt));
+      values.push(client.version,tag.ids,tag.rawNames,tag.raw,holding.id,holdings.length,holdings.length?index+1:'',holding.market,holding.name,typeof holding.manual==='boolean'?t(holding.manual?'是':'否'):'',hongKongTime(client.updatedAt));
       rows.push(values.map((value,i)=>csvCell(value,i===2||i===7)).join(','));
     }
   }

@@ -1,10 +1,10 @@
-import {validateRecommendation,recommendationPerformance,recommendationSyncTime} from './recommendations.js?v=0c76009c465500e9';
-import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=0c76009c465500e9';
-import {clientsCsv,recommendationsCsv} from './export-csv.js?v=0c76009c465500e9';
-import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=0c76009c465500e9';
-import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=0c76009c465500e9';
+import {validateRecommendation,recommendationPerformance,recommendationSyncTime} from './recommendations.js?v=8455c4913abaa648';
+import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=8455c4913abaa648';
+import {clientSummaryCsv,clientsCsv,recommendationsCsv} from './export-csv.js?v=8455c4913abaa648';
+import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=8455c4913abaa648';
+import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=8455c4913abaa648';
 setTextSize(textSize());
-const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=0c76009c465500e9')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
+const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=8455c4913abaa648')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${({download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',tag:'<path d="M20 13 13 20a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a22 22 0 0 0 18 0M12 12v3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 5v14M5 12h14"/>',chevron:'<path d="m9 5 7 7-7 7"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',logout:'<path d="M9 21H3V3h6M9 12h12m-5-5 5 5-5 5"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',book:'<path d="M12 5v16M12 5C9 2 5 3 2 4v15c3-1 7-2 10 2 3-4 7-3 10-2V4c-3-1-7-2-10 1Z"/>',check:'<path d="m5 12 4 4L19 6"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>'})[name] ?? ''}</svg>`;
@@ -48,7 +48,7 @@ function stat(label,value,foot,i){return `<div class="stat"><div class="stat-top
 function clientsView(){
   const groups=new Set(state.clients.map(c=>c.groupName).filter(Boolean));
   const awaiting=state.tags.find(t=>t.name==='沒有回應');
-  return ui`${pageHeading('CLIENT RELATIONSHIPS',t('客戶工作台'),t('掌握每位客戶的互動特徵與資產持倉，讓服務更有溫度。'),ui`<button class="btn" data-action="export-csv" title="匯出目前篩選的全部客戶及持倉">${icon('download')} 匯出 CSV</button><button class="btn" data-action="refresh">${icon('refresh')}<span class="refresh-label">重新整理</span></button><button class="btn primary" data-action="new-client">${icon('plus')} 新增客戶</button>`)}<section class="stats" aria-label="客戶概覽">${stat(t('客戶總數'),state.clients.length,t('已建立的客戶檔案'),'users')}${stat(t('服務群組'),groups.size,t('以服務群名稱統計'),'grid')}${stat(t('已記錄持倉'),state.clients.filter(c=>c.holdings.length).length,t('已登記至少一項資產的客戶'),'briefcase')}${stat(t('沒有回應'),state.clients.filter(c=>awaiting&&c.tags.includes(awaiting.id)).length,t('按團隊所選標籤統計'),'tag')}</section><section class="panel"><div class="panel-title"><div><h2>客戶名單</h2><small>CLIENT DIRECTORY</small></div><span class="pill">團隊共用 · 手動儲存</span></div><div class="filters"><div class="search-wrap">${icon('search')}<input id="client-search" aria-label="搜尋客戶" placeholder="搜尋姓氏、尾兩碼、群組或持倉代號" value="${esc(state.query)}"></div><select id="tag-filter" aria-label="按標籤篩選">${options([['',t('所有標籤')],...state.tags.map(tag=>[tag.id,tagLabel(tag.name)])],state.tag)}</select><select id="tier-filter" aria-label="按會員級別篩選">${options([['',t('所有級別')],['黑鑽',t('黑鑽會員')],['鑽石',t('鑽石會員')],['其他','其他']],state.tier)}</select><select id="market-filter" aria-label="按持倉市場篩選">${options([['',t('所有持倉市場')],['US',t('持有美股')],['HK',t('持有港股')],['Others',t('持有其他資產')]],state.market)}</select></div><div class="filter-info"><span id="filter-count"></span><button class="text-btn" data-action="clear-filters">清除篩選</button></div><div id="client-results"></div></section><div class="bottom-note"><span class="footer-lock">${icon('lock')} 僅顯示 WhatsApp 尾兩碼 · 點選客戶展開全部持倉</span><span>FORTHRIGHT · PRIVATE CLIENT SERVICES</span></div>`;
+  return ui`${pageHeading('CLIENT RELATIONSHIPS',t('客戶工作台'),t('掌握每位客戶的互動特徵與資產持倉，讓服務更有溫度。'),ui`<button class="btn" data-action="export-csv" title="包含全部客戶，不受分頁或篩選影響">${icon('download')} 匯出全部客戶 CSV</button><button class="btn" data-action="refresh">${icon('refresh')}<span class="refresh-label">重新整理</span></button><button class="btn primary" data-action="new-client">${icon('plus')} 新增客戶</button>`)}<section class="stats" aria-label="客戶概覽">${stat(t('客戶總數'),state.clients.length,t('已建立的客戶檔案'),'users')}${stat(t('服務群組'),groups.size,t('以服務群名稱統計'),'grid')}${stat(t('已記錄持倉'),state.clients.filter(c=>c.holdings.length).length,t('已登記至少一項資產的客戶'),'briefcase')}${stat(t('沒有回應'),state.clients.filter(c=>awaiting&&c.tags.includes(awaiting.id)).length,t('按團隊所選標籤統計'),'tag')}</section><section class="panel"><div class="panel-title"><div><h2>客戶名單</h2><small>CLIENT DIRECTORY</small></div><span class="pill">團隊共用 · 手動儲存</span></div><div class="filters"><div class="search-wrap">${icon('search')}<input id="client-search" aria-label="搜尋客戶" placeholder="搜尋姓氏、尾兩碼、群組或持倉代號" value="${esc(state.query)}"></div><select id="tag-filter" aria-label="按標籤篩選">${options([['',t('所有標籤')],...state.tags.map(tag=>[tag.id,tagLabel(tag.name)])],state.tag)}</select><select id="tier-filter" aria-label="按會員級別篩選">${options([['',t('所有級別')],['黑鑽',t('黑鑽會員')],['鑽石',t('鑽石會員')],['其他','其他']],state.tier)}</select><select id="market-filter" aria-label="按持倉市場篩選">${options([['',t('所有持倉市場')],['US',t('持有美股')],['HK',t('持有港股')],['Others',t('持有其他資產')]],state.market)}</select></div><div class="filter-info"><span id="filter-count"></span><button class="text-btn" data-action="clear-filters">清除篩選</button></div><div id="client-results"></div></section><div class="bottom-note"><span class="footer-lock">${icon('lock')} 僅顯示 WhatsApp 尾兩碼 · 點選客戶展開全部持倉</span><span>FORTHRIGHT · PRIVATE CLIENT SERVICES</span></div>`;
 }
 function filteredClients(){const q=state.query.trim().toLowerCase(); return state.clients.filter(c=>(!q||`${c.surname} ${c.last2} ${c.groupName} ${c.holdings.map(h=>`${h.symbol} ${h.name} ${securityName(h,state.securityNames)}`).join(' ')}`.toLowerCase().includes(q))&&(!state.tag||c.tags.includes(state.tag))&&(!state.tier||c.tier===state.tier)&&(!state.market||c.holdings.some(h=>h.market===state.market)));}
 function holdingValue(value){return value===''||value==null?t('未提供'):typeof value==='number'?value.toLocaleString(locale(),{maximumFractionDigits:20}):esc(value);}
@@ -62,6 +62,22 @@ function holdingPrice(h){
   return ui`<dl class="holding-prices"><div><dt>現價</dt><dd>${available?money(quote.price,quote.currency,false,6):`<span class="holding-price-empty">—</span>`}</dd></div><div><dt>未實現盈虧</dt><dd class="${pnl.status==='available'?(pnl.amount>0?'pnl-gain':pnl.amount<0?'pnl-loss':''):''}">${change}</dd></div></dl><p class="holding-quote-time">${timing}</p>`;
 }
 function expandedHoldings(){return state.clients.filter(c=>state.expandedClients.has(c.id)&&document.getElementById(`client-holdings-${c.id}`)).flatMap(c=>c.holdings);}
+function exportCounts(clients){
+  return {clients:clients.length,holdings:clients.reduce((sum,c)=>sum+c.holdings.length,0),rows:clients.reduce((sum,c)=>sum+Math.max(1,c.holdings.length),0)};
+}
+async function clientExportModal(){
+  if(csvExportPending||!state.user)return;
+  csvExportPending=true;
+  const identity=state.user.id;
+  try{
+    toast(t('正在載入全部客戶資料…'));
+    const data=await api('/data');
+    if(state.user?.id!==identity)return;
+    Object.assign(state,data);render();
+    const counts=exportCounts(state.clients);
+    showModal(ui`${modalHead(t('匯出全部客戶 CSV'),t('包含所有頁面及已收起的持倉，不受搜尋或篩選影響。'))}<div class="modal-body export-options"><p class="export-counts"><strong>${counts.clients}</strong> 位客戶 · <strong>${counts.holdings}</strong> 項持倉</p><section class="export-option"><h3>完整持倉明細</h3><p>每項持倉一行；沒有持倉的客戶也會保留一行。包括客戶資料、全部標籤及顏色、數量、成本、備註、現價、盈虧及報價時間。</p><button class="btn primary" data-action="export-client-details" ${counts.clients?'':'disabled'}>${icon('download')} 下載完整持倉明細 CSV</button><small>${counts.rows} 行資料 · 包含全部 ${counts.clients} 位客戶</small></section><section class="export-option"><h3>客戶總表</h3><p>每位客戶一行，包括全部客戶資料、標籤、團隊備註、持倉數目及全部持倉清單。個別持倉的數量、成本及報價請使用持倉明細。</p><button class="btn" data-action="export-client-summary" ${counts.clients?'':'disabled'}>${icon('download')} 下載客戶總表 CSV</button><small>${counts.clients} 行資料 · 每位客戶一行</small></section><p class="muted export-footnote">下載時會再讀取最新團隊資料；CSV 是匯出當刻的快照。</p></div><div class="modal-actions"><button class="btn" data-action="close">關閉</button></div>`);
+  }finally{csvExportPending=false;}
+}
 async function exportCsv(kind){
   if(csvExportPending||!state.user)return;
   csvExportPending=true;
@@ -71,20 +87,23 @@ async function exportCsv(kind){
     const data=await api('/data');
     if(state.user?.id!==identity)return;
     Object.assign(state,data);render();
-    const clients=structuredClone(filteredClients()),records=structuredClone(state.recommendations||[]),tags=structuredClone(state.tags),names=structuredClone(state.securityNames);
+    // Client exports always use the complete fresh dataset, never the visible page or filters.
+    const clients=structuredClone(state.clients),records=structuredClone(state.recommendations||[]),tags=structuredClone(state.tags),names=structuredClone(state.securityNames);
     const entries=kind==='recommendations'?records:clients;
     if(!entries.length){toast(t(kind==='recommendations'?'沒有可匯出的推介':'沒有可匯出的客戶'));return;}
     const holdings=kind==='recommendations'?records:clients.flatMap(c=>c.holdings),quotesEnabled=state.quotesEnabled;
-    // Export all matching pages and collapsed holdings, respecting the shared 30-minute cache.
-    if(quotesEnabled)await quoteCache.load(holdings,{force:true});
+    // The directory needs no quotes; details include all collapsed/off-page holdings.
+    if(quotesEnabled&&kind!=='client-summary')await quoteCache.load(holdings,{force:true});
     if(state.user?.id!==identity)return;
     const exportedAt=new Date().toISOString(),options={exportedAt,quoteFor:h=>quotesEnabled?quoteCache.read(h):{status:'disabled'}};
-    const content=kind==='recommendations'?recommendationsCsv(records,names,options):clientsCsv(clients,tags,names,options);
+    const content=kind==='recommendations'?recommendationsCsv(records,names,options):kind==='client-summary'?clientSummaryCsv(clients,tags,names,options):clientsCsv(clients,tags,names,options);
     const blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
-    link.href=url;link.download=`Forthright_${kind}_${new Date(exportedAt).toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})}.csv`;
+    const fileKind=kind==='clients'?'all_client_holdings':kind==='client-summary'?'all_clients':kind;
+    link.href=url;link.download=`Forthright_${fileKind}_${new Date(exportedAt).toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})}.csv`;
     document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
     renderQuotePrices();
-    toast(kind==='recommendations'?ui`已匯出 ${records.length} 項推介 · 包含 Entry、SL、TP 及報價時間`:ui`已匯出 ${clients.length} 位客戶 · 包含全部篩選頁面、標籤及持倉報價`);
+    const counts=exportCounts(clients);
+    toast(kind==='recommendations'?ui`已匯出 ${records.length} 項推介 · 包含 Entry、SL、TP 及報價時間`:kind==='client-summary'?ui`已匯出全部 ${counts.clients} 位客戶 · ${counts.clients} 行客戶總表`:ui`已匯出全部 ${counts.clients} 位客戶、${counts.holdings} 項持倉 · ${counts.rows} 行完整明細`);
   }finally{csvExportPending=false;}
 }
 function renderHoldingPrices(){for(const el of document.querySelectorAll('[data-holding-prices]')){const client=state.clients.find(c=>c.id===el.dataset.clientId),holding=client?.holdings[Number(el.dataset.holdingPrices)];if(holding)el.innerHTML=holdingPrice(holding);}}
@@ -220,7 +239,9 @@ document.addEventListener('click',async e=>{
     if(a==='clear-filters'){Object.assign(state,{query:'',tag:'',tier:'',market:'',page:1});render();}
     if(a==='prev'||a==='next'){state.page+=a==='prev'?-1:1;renderClientRows();}
     if(a==='toggle-tag'){const tags=state.draft.tags;tags.includes(id)?tags.splice(tags.indexOf(id),1):tags.push(id);b.classList.toggle('selected');b.setAttribute('aria-pressed',String(tags.includes(id)));}
-    if(a==='export-csv')await exportCsv('clients');
+    if(a==='export-csv')await clientExportModal();
+    if(a==='export-client-details')await exportCsv('clients');
+    if(a==='export-client-summary')await exportCsv('client-summary');
     if(a==='export-recommendations-csv')await exportCsv('recommendations');
     if(a==='text-size'){const next=textSizes[(textSizes.findIndex(s=>s.id===textSize())+1)%textSizes.length];setTextSize(next.id);b.outerHTML=textSizeControl();document.querySelector('[data-action="text-size"]')?.focus();}
     if(a==='tag-color'){$('#tag-color').value=b.dataset.color;updateTagPreview();}
