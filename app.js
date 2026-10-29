@@ -1,15 +1,15 @@
-import {validateRecommendation,recommendationPerformance,recommendationSyncTime} from './recommendations.js?v=fd052f323a77b1b2';
-import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=fd052f323a77b1b2';
-import {clientsCsv} from './export-csv.js?v=fd052f323a77b1b2';
-import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=fd052f323a77b1b2';
-import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=fd052f323a77b1b2';
+import {validateRecommendation,recommendationPerformance,recommendationSyncTime} from './recommendations.js?v=0c76009c465500e9';
+import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=0c76009c465500e9';
+import {clientsCsv,recommendationsCsv} from './export-csv.js?v=0c76009c465500e9';
+import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=0c76009c465500e9';
+import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=0c76009c465500e9';
 setTextSize(textSize());
-const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=fd052f323a77b1b2')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
+const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=0c76009c465500e9')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${({download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',tag:'<path d="M20 13 13 20a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a22 22 0 0 0 18 0M12 12v3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 5v14M5 12h14"/>',chevron:'<path d="m9 5 7 7-7 7"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',logout:'<path d="M9 21H3V3h6M9 12h12m-5-5 5 5-5 5"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',book:'<path d="M12 5v16M12 5C9 2 5 3 2 4v15c3-1 7-2 10 2 3-4 7-3 10-2V4c-3-1-7-2-10 1Z"/>',check:'<path d="m5 12 4 4L19 6"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>'})[name] ?? ''}</svg>`;
 const state = { user:null, demo:false, clients:[], recommendations:[], recommendationsSync:null,recommendationsSyncRequest:null, tags:[], catalog:{}, securityNames:{}, view:'clients', query:'', tag:'', tier:'', market:'', page:1, expandedClients:new Set(), draft:null, securityResults:[], searchSeq:0, users:[] };
-let toastTimer, searchTimer;
+let toastTimer, searchTimer, csvExportPending=false;
 const quoteCache=createQuoteCache(symbols=>api('/quotes','POST',{symbols}));
 function toast(message) { $('#toast').textContent=t(message); $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000); }
 async function api(path, method='GET', body) {
@@ -62,6 +62,31 @@ function holdingPrice(h){
   return ui`<dl class="holding-prices"><div><dt>現價</dt><dd>${available?money(quote.price,quote.currency,false,6):`<span class="holding-price-empty">—</span>`}</dd></div><div><dt>未實現盈虧</dt><dd class="${pnl.status==='available'?(pnl.amount>0?'pnl-gain':pnl.amount<0?'pnl-loss':''):''}">${change}</dd></div></dl><p class="holding-quote-time">${timing}</p>`;
 }
 function expandedHoldings(){return state.clients.filter(c=>state.expandedClients.has(c.id)&&document.getElementById(`client-holdings-${c.id}`)).flatMap(c=>c.holdings);}
+async function exportCsv(kind){
+  if(csvExportPending||!state.user)return;
+  csvExportPending=true;
+  const identity=state.user.id;
+  try{
+    toast(t('正在準備最新資料及報價…'));
+    const data=await api('/data');
+    if(state.user?.id!==identity)return;
+    Object.assign(state,data);render();
+    const clients=structuredClone(filteredClients()),records=structuredClone(state.recommendations||[]),tags=structuredClone(state.tags),names=structuredClone(state.securityNames);
+    const entries=kind==='recommendations'?records:clients;
+    if(!entries.length){toast(t(kind==='recommendations'?'沒有可匯出的推介':'沒有可匯出的客戶'));return;}
+    const holdings=kind==='recommendations'?records:clients.flatMap(c=>c.holdings),quotesEnabled=state.quotesEnabled;
+    // Export all matching pages and collapsed holdings, respecting the shared 30-minute cache.
+    if(quotesEnabled)await quoteCache.load(holdings,{force:true});
+    if(state.user?.id!==identity)return;
+    const exportedAt=new Date().toISOString(),options={exportedAt,quoteFor:h=>quotesEnabled?quoteCache.read(h):{status:'disabled'}};
+    const content=kind==='recommendations'?recommendationsCsv(records,names,options):clientsCsv(clients,tags,names,options);
+    const blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
+    link.href=url;link.download=`Forthright_${kind}_${new Date(exportedAt).toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})}.csv`;
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+    renderQuotePrices();
+    toast(kind==='recommendations'?ui`已匯出 ${records.length} 項推介 · 包含 Entry、SL、TP 及報價時間`:ui`已匯出 ${clients.length} 位客戶 · 包含全部篩選頁面、標籤及持倉報價`);
+  }finally{csvExportPending=false;}
+}
 function renderHoldingPrices(){for(const el of document.querySelectorAll('[data-holding-prices]')){const client=state.clients.find(c=>c.id===el.dataset.clientId),holding=client?.holdings[Number(el.dataset.holdingPrices)];if(holding)el.innerHTML=holdingPrice(holding);}}
 async function loadHoldingPrices(force=false){
   if(!state.user||!state.quotesEnabled||!['clients','recommendations'].includes(state.view)||document.hidden)return;
@@ -84,7 +109,7 @@ function recommendationSyncStatus(){
 }
 function recommendationsView(){
  const list=state.recommendations||[];
- return ui`${pageHeading('STOCK RECOMMENDATIONS',t('股票推介'),t('記錄團隊推介及部署價位，追蹤現價相對 Entry 的表現。'),ui`<button class="btn" data-action="refresh">${icon('refresh')} 重新整理</button>${state.quotesEnabled?ui`<button class="btn" data-action="refresh-prices">${icon('refresh')} 更新報價</button>`:''}<button class="btn primary" data-action="new-recommendation">${icon('plus')} 新增推介</button>`)}${recommendationSyncStatus()}<section class="panel"><div class="panel-title"><div><h2>團隊股票推介</h2><small>${list.length} ${t('項推介')} · ${t('儲存後全團隊可見')}</small></div><span class="pill">Entry → 現價 %</span></div>${list.length?`<div class="table-wrap"><table class="recommendations-table"><thead><tr><th>${t('股票')}</th><th>${t('推介日期')}</th><th>Entry</th><th>SL</th><th>TP</th><th>${t('現價 / 表現')}</th><th>${t('備註')}</th><th></th></tr></thead><tbody>${list.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong><small>${esc(securityName(r,state.securityNames))}</small><span class="tier">${marketLabels[r.market]} · ${esc(r.currency)}</span></td><td>${esc(r.recommendDate)}</td><td>${holdingValue(r.entry)}</td><td>${r.stopLoss.map(holdingValue).join('<br>')}</td><td>${r.takeProfit.map(holdingValue).join('<br>')}</td><td class="recommendation-price" data-recommendation-price="${esc(r.id)}">${recommendationPrice(r)}</td><td class="recommendation-remarks">${esc(r.remarks)||'—'}</td><td><button class="btn small" data-action="edit-recommendation" data-id="${esc(r.id)}">${t('編輯')}</button></td></tr>`).join('')}</tbody></table></div>`:t('<div class="empty"><h3>尚未新增推介</h3><p>新增股票、Entry、SL、TP 及推介日期，開始記錄。</p></div>')}</section><p class="bottom-note">${t('表現 =（現價 ÷ Entry − 1）× 100%；未計派息及交易費用，不代表實際客戶回報。報價快取 30 分鐘，時間以香港時間顯示。SL／TP 為部署參考；不代表已成交或曾觸及。')}</p>`;
+ return ui`${pageHeading('STOCK RECOMMENDATIONS',t('股票推介'),t('記錄團隊推介及部署價位，追蹤現價相對 Entry 的表現。'),ui`<button class="btn" data-action="export-recommendations-csv" title="匯出全部股票推介及報價時間">${icon('download')} 匯出 CSV</button><button class="btn" data-action="refresh">${icon('refresh')} 重新整理</button>${state.quotesEnabled?ui`<button class="btn" data-action="refresh-prices">${icon('refresh')} 更新報價</button>`:''}<button class="btn primary" data-action="new-recommendation">${icon('plus')} 新增推介</button>`)}${recommendationSyncStatus()}<section class="panel"><div class="panel-title"><div><h2>團隊股票推介</h2><small>${list.length} ${t('項推介')} · ${t('儲存後全團隊可見')}</small></div><span class="pill">Entry → 現價 %</span></div>${list.length?`<div class="table-wrap"><table class="recommendations-table"><thead><tr><th>${t('股票')}</th><th>${t('推介日期')}</th><th>Entry</th><th>SL</th><th>TP</th><th>${t('現價 / 表現')}</th><th>${t('備註')}</th><th></th></tr></thead><tbody>${list.map(r=>`<tr><td><strong>${esc(r.symbol)}</strong><small>${esc(securityName(r,state.securityNames))}</small><span class="tier">${marketLabels[r.market]} · ${esc(r.currency)}</span></td><td>${esc(r.recommendDate)}</td><td>${holdingValue(r.entry)}</td><td>${r.stopLoss.map(holdingValue).join('<br>')}</td><td>${r.takeProfit.map(holdingValue).join('<br>')}</td><td class="recommendation-price" data-recommendation-price="${esc(r.id)}">${recommendationPrice(r)}</td><td class="recommendation-remarks">${esc(r.remarks)||'—'}</td><td><button class="btn small" data-action="edit-recommendation" data-id="${esc(r.id)}">${t('編輯')}</button></td></tr>`).join('')}</tbody></table></div>`:t('<div class="empty"><h3>尚未新增推介</h3><p>新增股票、Entry、SL、TP 及推介日期，開始記錄。</p></div>')}</section><p class="bottom-note">${t('表現 =（現價 ÷ Entry − 1）× 100%；未計派息及交易費用，不代表實際客戶回報。報價快取 30 分鐘，時間以香港時間顯示。SL／TP 為部署參考；不代表已成交或曾觸及。')}</p>`;
 }
 function recommendationModal(id){
  const r=id?state.recommendations.find(r=>r.id===id):{market:'US',symbol:'',name:'',entry:'',stopLoss:[],takeProfit:[],remarks:'',recommendDate:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})};
@@ -195,7 +220,8 @@ document.addEventListener('click',async e=>{
     if(a==='clear-filters'){Object.assign(state,{query:'',tag:'',tier:'',market:'',page:1});render();}
     if(a==='prev'||a==='next'){state.page+=a==='prev'?-1:1;renderClientRows();}
     if(a==='toggle-tag'){const tags=state.draft.tags;tags.includes(id)?tags.splice(tags.indexOf(id),1):tags.push(id);b.classList.toggle('selected');b.setAttribute('aria-pressed',String(tags.includes(id)));}
-    if(a==='export-csv'){await load();render();const clients=filteredClients();if(!clients.length){toast(t('沒有可匯出的客戶'));return;}const blob=new Blob([clientsCsv(clients,state.tags,state.securityNames)],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`Forthright_clients_${new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})}.csv`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);toast(ui`已匯出 ${clients.length} 位客戶 · 包含目前篩選的全部頁面`);}
+    if(a==='export-csv')await exportCsv('clients');
+    if(a==='export-recommendations-csv')await exportCsv('recommendations');
     if(a==='text-size'){const next=textSizes[(textSizes.findIndex(s=>s.id===textSize())+1)%textSizes.length];setTextSize(next.id);b.outerHTML=textSizeControl();document.querySelector('[data-action="text-size"]')?.focus();}
     if(a==='tag-color'){$('#tag-color').value=b.dataset.color;updateTagPreview();}
     if(a==='new-tag')tagModal();
