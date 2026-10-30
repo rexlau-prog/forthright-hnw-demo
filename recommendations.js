@@ -21,3 +21,9 @@ export function recommendationSyncTime(sync,locale='zh-HK'){
  const date=new Date(value);
  return {iso:date.toISOString(),display:date.toLocaleString(locale,{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})+' HKT'};
 }
+
+export function recommendationSyncRecovered(sync,request){
+ // A later verified source read supersedes an earlier failed manual request.
+ const failed=Date.parse(request?.failedAt),read=Date.parse(sync?.sourceReadAt),success=Date.parse(sync?.lastSuccessAt);
+ return Number.isFinite(failed)&&Number.isFinite(read)&&Number.isFinite(success)&&read>=failed&&success>=read;
+}

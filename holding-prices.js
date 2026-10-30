@@ -1,4 +1,4 @@
-import {isFuture,assetPresets,defaultCurrency} from './assets.js?v=8e5b777ad36ef979';
+import {isFuture,assetPresets,defaultCurrency} from './assets.js?v=5067aeca129d55ab';
 // Quote adapters receive symbols only. Client identity, size and cost stay in the browser.
 export function quoteKey(asset) {
   const symbol=String(asset?.symbol??'').trim().toUpperCase();

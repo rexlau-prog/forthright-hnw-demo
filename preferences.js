@@ -1,4 +1,4 @@
-import {t} from './language.js?v=8e5b777ad36ef979';
+import {t} from './language.js?v=5067aeca129d55ab';
 export const textSizes=[{id:'standard',label:'標準',scale:1},{id:'large',label:'大',scale:1.15},{id:'extra-large',label:'特大',scale:1.3}];
 let size='standard';
 try {const saved=globalThis.localStorage?.getItem('forthright-text-size');if(textSizes.some(s=>s.id===saved))size=saved;} catch {}
