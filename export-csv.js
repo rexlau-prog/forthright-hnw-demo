@@ -1,7 +1,7 @@
-import {markets,contractLabel} from './assets.js?v=2695d527b6c00845';
-import {t,tagLabel,securityName} from './language.js?v=2695d527b6c00845';
-import {unrealizedPnl} from './holding-prices.js?v=2695d527b6c00845';
-import {recommendationPerformance} from './recommendations.js?v=2695d527b6c00845';
+import {markets,contractLabel} from './assets.js?v=8e5b777ad36ef979';
+import {t,tagLabel,securityName} from './language.js?v=8e5b777ad36ef979';
+import {unrealizedPnl} from './holding-prices.js?v=8e5b777ad36ef979';
+import {recommendationPerformance} from './recommendations.js?v=8e5b777ad36ef979';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
@@ -54,7 +54,7 @@ export function clientSummaryCsv(clients,tags,names={}, {exportedAt=new Date().t
 export function clientsCsv(clients,tags,names={}, {quoteFor=()=>null,exportedAt=new Date().toISOString()}={}){
   const labels=['客戶編號','客戶姓氏','WhatsApp 尾兩碼','服務群組','會員級別','客戶標籤','持倉市場','持倉代號','資產名稱','資產類型','幣種','數量','平均成本','持倉備註','團隊備註','最後更新時間','更新同事'];
   labels.push('標籤顏色（標籤=HEX）',...quoteLabels,'未實現盈虧','未實現盈虧（%）','盈虧幣種','盈虧狀態','匯出時間（香港時間）');
-  labels.push('客戶資料版本','標籤編號','原始標籤名稱','標籤原始資料（JSON）','持倉編號','客戶持倉總數','持倉次序','市場代碼','原始資產名稱','手動輸入資產','最後更新時間（香港時間）','期貨合約月份','期貨持倉方向');
+  labels.push('客戶資料版本','標籤編號','原始標籤名稱','標籤原始資料（JSON）','持倉編號','客戶持倉總數','持倉次序','市場代碼','原始資產名稱','手動輸入資產','最後更新時間（香港時間）','期貨合約月份','期貨持倉方向','期貨合約乘數','盈虧計算基礎');
   const rows=[labels.map(label=>csvCell(t(label))).join(',')];
   for(const client of clients){
     const tag=clientTags(client,tags),holdings=client.holdings??[];
@@ -63,10 +63,10 @@ export function clientsCsv(clients,tags,names={}, {quoteFor=()=>null,exportedAt=
       const market=t(markets[holding.market]??'');
       const values=[client.id,client.surname,client.last2,client.groupName,t(client.tier),tag.names,market,holding.symbol,securityName(holding,names),holding.type,holding.currency,holding.quantity,holding.avgCost,holding.notes,client.notes,client.updatedAt,client.updatedBy];
       const quote=holding.symbol?quoteFor(holding):null,pnl=unrealizedPnl(holding,quote);
-      const pnlStatus={'available':'可用','no-quote':'暫無報價','missing-position':'請補充數量及平均成本','currency-mismatch':'成本與報價幣種不同','invalid-position':'請檢查持倉數值'};
+      const pnlStatus={'available':'可用','no-quote':'暫無報價','missing-position':'請補充數量及平均成本','currency-mismatch':'成本與報價幣種不同','invalid-position':'請檢查持倉數值','missing-contract':'合約資料未確認'};
       values.push(tag.colors,...(holding.symbol?quoteValues(quote):quoteLabels.map(()=>'')),
         rounded(pnl.amount),rounded(pnl.percent),pnl.currency??'',holding.symbol?t(pnlStatus[pnl.status]):'',hongKongTime(exportedAt));
-      values.push(client.version,tag.ids,tag.rawNames,tag.raw,holding.id,holdings.length,holdings.length?index+1:'',holding.market,holding.name,typeof holding.manual==='boolean'?t(holding.manual?'是':'否'):'',hongKongTime(client.updatedAt),holding.contractMonth??'',holding.direction??'');
+      values.push(client.version,tag.ids,tag.rawNames,tag.raw,holding.id,holdings.length,holdings.length?index+1:'',holding.market,holding.name,typeof holding.manual==='boolean'?t(holding.manual?'是':'否'):'',hongKongTime(client.updatedAt),holding.contractMonth??'',holding.direction??'',quote?.contractMultiplier??'',pnl.status==='available'?t(pnl.basis==='contract-multiplier'?'報價差 × 合約張數 × 合約乘數 × 方向；非保證金回報':'（現價 − 平均成本）× 數量'):'');
       rows.push(values.map((value,i)=>csvCell(value,i===2||i===7)).join(','));
     }
   }
