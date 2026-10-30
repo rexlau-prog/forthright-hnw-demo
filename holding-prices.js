@@ -1,3 +1,4 @@
+import {isFuture} from './assets.js?v=2695d527b6c00845';
 // Quote adapters receive symbols only. Client identity, size and cost stay in the browser.
 export function quoteKey(asset) {
   const symbol=String(asset?.symbol??'').trim().toUpperCase();
@@ -21,6 +22,7 @@ export function validateQuote(asset,quote,now=Date.now()) {
 
 const validNumber=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0;
 export function unrealizedPnl(holding,quote) {
+  if(isFuture(holding)||holding.market==='Crypto')return {status:'no-quote'};
   if(quote?.status!=='available')return {status:'no-quote'};
   if(!validNumber(quote.price))return {status:'no-quote'};
   if(!validNumber(holding.quantity)||!validNumber(holding.avgCost))return {status:'missing-position'};

@@ -1,5 +1,7 @@
 // Browser-safe credentials only. Sessions and client records stay in memory.
 // No localStorage, sessionStorage, IndexedDB, or service-worker cache.
+import {withAssetPresets} from './assets.js?v=2695d527b6c00845';
+
 export function createCloudApi(config, fetcher = fetch) {
   const base = config.url.replace(/\/$/, '');
   if (!/^https:\/\/[a-z0-9]+\.supabase\.co$/.test(base) || !/^sb_publishable_/.test(config.key)) throw new Error('雲端設定不正確');
@@ -41,7 +43,7 @@ export function createCloudApi(config, fetcher = fetch) {
     catch(e){if(e.status===401)throw e;return {connected:false,configured:true,unavailable:true};}
   }
   async function catalog() {
-    if(!catalogPromise) catalogPromise=fetcher(new URL('./securities.json',import.meta.url),{credentials:'omit'}).then(r=>{if(!r.ok)throw new Error('無法載入證券目錄');return r.json();}).catch(e=>{catalogPromise=null;throw e;});
+    if(!catalogPromise) catalogPromise=fetcher(new URL('./securities.json',import.meta.url),{credentials:'omit'}).then(r=>{if(!r.ok)throw new Error('無法載入證券目錄');return r.json();}).then(withAssetPresets).catch(e=>{catalogPromise=null;throw e;});
     return catalogPromise;
   }
   return async function api(path,method='GET',body={}) {
