@@ -1,7 +1,7 @@
-import {markets,contractLabel} from './assets.js?v=5067aeca129d55ab';
-import {t,tagLabel,securityName} from './language.js?v=5067aeca129d55ab';
-import {unrealizedPnl} from './holding-prices.js?v=5067aeca129d55ab';
-import {recommendationPerformance} from './recommendations.js?v=5067aeca129d55ab';
+import {markets,contractLabel} from './assets.js?v=8541f84c0d7b589e';
+import {t,tagLabel,securityName} from './language.js?v=8541f84c0d7b589e';
+import {unrealizedPnl} from './holding-prices.js?v=8541f84c0d7b589e';
+import {recommendationPerformance,recommendationMarkets,recommendationPriceUnit} from './recommendations.js?v=8541f84c0d7b589e';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
@@ -75,15 +75,15 @@ export function clientsCsv(clients,tags,names={}, {quoteFor=()=>null,exportedAt=
 }
 
 export function recommendationsCsv(records,names={}, {quoteFor=()=>null,exportedAt=new Date().toISOString()}={}){
-  const labels=['推介編號','推介日期','市場','股票代號','股票名稱','幣種','入場價（Entry）','止蝕價（SL）','目標價（TP）','備註','最後更新時間','更新同事',...quoteLabels,'相對入場價變動','相對入場價表現（%）','匯出時間（香港時間）'];
+  const labels=['推介編號','推介日期','市場','資產代號','資產名稱','幣種','入場價（Entry）','止蝕價（SL）','目標價（TP）','備註','最後更新時間','更新同事',...quoteLabels,'相對入場價變動','相對入場價表現（%）','匯出時間（香港時間）','價位單位'];
   const rows=[labels.map(t)];
   for(const record of records){
     const quote=quoteFor(record),performance=recommendationPerformance(record,quote);
     // Prefix HK codes before serialization so Excel retains all five digits.
     const symbol=record.market==='HK'&&/^0\d+$/.test(record.symbol)?"'"+record.symbol:record.symbol;
-    rows.push([record.id,record.recommendDate,t(record.market==='HK'?'港股':'美股'),symbol,securityName(record,names),record.currency,record.entry,
+    rows.push([record.id,record.recommendDate,t(recommendationMarkets[record.market]??record.market),symbol,securityName(record,names),record.currency,record.entry,
       record.stopLoss.join(' / '),record.takeProfit.join(' / '),record.remarks,record.updatedAt,record.updatedBy,
-      ...quoteValues(quote),rounded(performance?.change),rounded(performance?.percent),hongKongTime(exportedAt)]);
+      ...quoteValues(quote),rounded(performance?.change),rounded(performance?.percent),hongKongTime(exportedAt),t(recommendationPriceUnit(record))]);
   }
   return csv(rows);
 }
