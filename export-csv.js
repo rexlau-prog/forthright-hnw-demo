@@ -1,7 +1,7 @@
-import {markets,contractLabel} from './assets.js?v=99b8c4345705116e';
-import {t,tagLabel,securityName} from './language.js?v=99b8c4345705116e';
-import {unrealizedPnl} from './holding-prices.js?v=99b8c4345705116e';
-import {recommendationPerformance,recommendationMarkets,recommendationPriceUnit} from './recommendations.js?v=99b8c4345705116e';
+import {markets,contractLabel} from './assets.js?v=6a8604836f2ca897';
+import {t,tagLabel,securityName} from './language.js?v=6a8604836f2ca897';
+import {unrealizedPnl} from './holding-prices.js?v=6a8604836f2ca897';
+import {recommendationPerformance,recommendationMarkets,recommendationPriceUnit,stopLossPrecisions} from './recommendations.js?v=6a8604836f2ca897';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
@@ -75,7 +75,7 @@ export function clientsCsv(clients,tags,names={}, {quoteFor=()=>null,exportedAt=
 }
 
 export function recommendationsCsv(records,names={}, {quoteFor=()=>null,exportedAt=new Date().toISOString()}={}){
-  const labels=['推介編號','推介日期','市場','資產代號','資產名稱','幣種','入場價（Entry）','止蝕價（SL）','目標價（TP）','備註','最後更新時間','更新同事',...quoteLabels,'相對入場價變動','相對入場價表現（%）','匯出時間（香港時間）','價位單位'];
+  const labels=['推介編號','推介日期','市場','資產代號','資產名稱','幣種','入場價（Entry）','止蝕價（SL）','目標價（TP）','備註','最後更新時間','更新同事',...quoteLabels,'相對入場價變動','相對入場價表現（%）','匯出時間（香港時間）','價位單位','止蝕狀態','止蝕觸及日期（香港時間）','止蝕觸及時間（HKT）','止蝕時間精度','觸及的止蝕價','止蝕核實來源','止蝕核實說明'];
   const rows=[labels.map(t)];
   for(const record of records){
     const quote=quoteFor(record),performance=recommendationPerformance(record,quote);
@@ -83,7 +83,7 @@ export function recommendationsCsv(records,names={}, {quoteFor=()=>null,exported
     const symbol=record.market==='HK'&&/^0\d+$/.test(record.symbol)?"'"+record.symbol:record.symbol;
     rows.push([record.id,record.recommendDate,t(recommendationMarkets[record.market]??record.market),symbol,securityName(record,names),record.currency,record.entry,
       record.stopLoss.join(' / '),record.takeProfit.join(' / '),record.remarks,record.updatedAt,record.updatedBy,
-      ...quoteValues(quote),rounded(performance?.change),rounded(performance?.percent),hongKongTime(exportedAt),t(recommendationPriceUnit(record))]);
+      ...quoteValues(quote),rounded(performance?.change),rounded(performance?.percent),hongKongTime(exportedAt),t(recommendationPriceUnit(record)),t(record.stopLossHit?'已觸及止蝕':'未記錄觸發'),record.stopLossHit?.date??'',record.stopLossHit?.time??'',record.stopLossHit?t(stopLossPrecisions[record.stopLossHit.precision]):'',record.stopLossHit?.level??'',record.stopLossHit?.source??'',record.stopLossHit?.notes??'']);
   }
   return csv(rows);
 }
