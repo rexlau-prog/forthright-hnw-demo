@@ -1,17 +1,18 @@
-import {markets,isFuture,assetType,defaultCurrency,holdingIdentity,contractLabel} from './assets.js?v=6a8604836f2ca897';
-import {validateRecommendation,recommendationPerformance,recommendationSyncTime,recommendationSyncRecovered,recommendationMarkets,recommendationPriceUnit,stopLossPrecisions,stopLossHitTime} from './recommendations.js?v=6a8604836f2ca897';
-import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=6a8604836f2ca897';
-import {clientSummaryCsv,clientsCsv,recommendationsCsv} from './export-csv.js?v=6a8604836f2ca897';
-import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=6a8604836f2ca897';
-import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=6a8604836f2ca897';
+import {markets,isFuture,assetType,defaultCurrency,holdingIdentity,contractLabel} from './assets.js?v=0b51189d82f34cc2';
+import {validateRecommendation,recommendationPerformance,recommendationSyncTime,recommendationSyncRecovered,recommendationMarkets,recommendationPriceUnit,recommendationStopLevels,stopLossPrecisions,stopLossHitTime} from './recommendations.js?v=0b51189d82f34cc2';
+import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=0b51189d82f34cc2';
+import {clientSummaryCsv,clientsCsv,recommendationsCsv} from './export-csv.js?v=0b51189d82f34cc2';
+import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=0b51189d82f34cc2';
+import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=0b51189d82f34cc2';
 setTextSize(textSize());
-const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=6a8604836f2ca897')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
+const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=0b51189d82f34cc2')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${({download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',tag:'<path d="M20 13 13 20a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a22 22 0 0 0 18 0M12 12v3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 5v14M5 12h14"/>',chevron:'<path d="m9 5 7 7-7 7"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',logout:'<path d="M9 21H3V3h6M9 12h12m-5-5 5 5-5 5"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',book:'<path d="M12 5v16M12 5C9 2 5 3 2 4v15c3-1 7-2 10 2 3-4 7-3 10-2V4c-3-1-7-2-10 1Z"/>',check:'<path d="m5 12 4 4L19 6"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>'})[name] ?? ''}</svg>`;
 const state = { user:null, demo:false, clients:[], recommendations:[], recommendationsSync:null,recommendationsSyncRequest:null, tags:[], catalog:{}, securityNames:{}, view:'clients', query:'', tag:'', tier:'', market:'', page:1, expandedClients:new Set(), draft:null, securityResults:[], searchSeq:0, users:[] };
 let toastTimer, searchTimer, csvExportPending=false;
 const quoteCache=createQuoteCache(symbols=>api('/quotes','POST',{symbols}));
+const quoteEnabledFor=asset=>asset.market==='SpotGold'?state.quoteConnection?.spotGold===true:state.quotesEnabled;
 function toast(message) { $('#toast').textContent=t(message); $('#toast').classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),4000); }
 async function api(path, method='GET', body) {
  try {
@@ -93,11 +94,11 @@ async function exportCsv(kind){
     const clients=structuredClone(state.clients),records=structuredClone(state.recommendations||[]),tags=structuredClone(state.tags),names=structuredClone(state.securityNames);
     const entries=kind==='recommendations'?records:clients;
     if(!entries.length){toast(t(kind==='recommendations'?'沒有可匯出的推介':'沒有可匯出的客戶'));return;}
-    const holdings=kind==='recommendations'?records:clients.flatMap(c=>c.holdings),quotesEnabled=state.quotesEnabled;
+    const holdings=(kind==='recommendations'?records:clients.flatMap(c=>c.holdings)).filter(quoteEnabledFor);
     // The directory needs no quotes; details include all collapsed/off-page holdings.
-    if(quotesEnabled&&kind!=='client-summary')await quoteCache.load(holdings,{force:true});
+    if(holdings.length&&kind!=='client-summary')await quoteCache.load(holdings,{force:true});
     if(state.user?.id!==identity)return;
-    const exportedAt=new Date().toISOString(),options={exportedAt,quoteFor:h=>quotesEnabled?quoteCache.read(h):{status:'disabled'}};
+    const exportedAt=new Date().toISOString(),options={exportedAt,quoteFor:h=>quoteEnabledFor(h)?quoteCache.read(h):{status:'disabled'}};
     const content=kind==='recommendations'?recommendationsCsv(records,names,options):kind==='client-summary'?clientSummaryCsv(clients,tags,names,options):clientsCsv(clients,tags,names,options);
     const blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),link=document.createElement('a');
     const fileKind=kind==='clients'?'all_client_holdings':kind==='client-summary'?'all_clients':kind;
@@ -110,17 +111,17 @@ async function exportCsv(kind){
 }
 function renderHoldingPrices(){for(const el of document.querySelectorAll('[data-holding-prices]')){const client=state.clients.find(c=>c.id===el.dataset.clientId),holding=client?.holdings[Number(el.dataset.holdingPrices)];if(holding)el.innerHTML=holdingPrice(holding);}}
 async function loadHoldingPrices(force=false){
-  if(!state.user||!state.quotesEnabled||!['clients','recommendations'].includes(state.view)||document.hidden)return;
-  const holdings=state.view==='recommendations'?(state.recommendations||[]):expandedHoldings();if(!holdings.length)return;
+  if(!state.user||!['clients','recommendations'].includes(state.view)||document.hidden)return;
+  const holdings=(state.view==='recommendations'?(state.recommendations||[]):expandedHoldings()).filter(quoteEnabledFor);if(!holdings.length)return;
   const identity=state.user.id,work=quoteCache.load(holdings,{force});renderQuotePrices();await work;
   if(state.user?.id===identity)renderQuotePrices();
 }
 function renderQuotePrices(){if(state.view==='clients')renderHoldingPrices();if(state.view==='recommendations')for(const el of document.querySelectorAll('[data-recommendation-price]')){const r=state.recommendations.find(r=>r.id===el.dataset.recommendationPrice);if(r)el.innerHTML=recommendationPrice(r);}}
 function recommendationPrice(r){
- if(r.market==='SpotGold')return ui`<span class="muted">—</span><small>暫未提供現貨黃金報價</small>`;
  const q=quoteCache.read(r),p=recommendationPerformance(r,q);
- if(!p)return ui`<span class="muted">—</span><small>${state.quotesEnabled?(q.status==='loading'?t('載入報價中…'):t('報價暫不可用')):t('尚未連接報價服務')}</small>`;
- return `<strong>${money(q.price,q.currency,false,6)}</strong><span class="${p.percent>0?'pnl-gain':p.percent<0?'pnl-loss':''}">${p.percent.toLocaleString(locale(),{maximumFractionDigits:2,minimumFractionDigits:2,signDisplay:'exceptZero'})}%</span><small>${new Date(q.asOf).toLocaleString(locale(),{timeZone:'Asia/Hong_Kong',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} HKT · ${esc(q.source)}${q.delayMinutes!=null?` · ${t('延遲')} ${q.delayMinutes} ${t('分鐘')}`:''}${q.session==='closed'?` · ${t('最近收市')}`:''}</small>`;
+ if(!p)return ui`<span class="muted">—</span><small>${quoteEnabledFor(r)?(q.status==='loading'?t('載入報價中…'):t('報價暫不可用')):t('尚未連接報價服務')}</small>`;
+ const gold=r.market==='SpotGold',olderGold=gold&&Date.now()-Date.parse(q.asOf)>1800000;
+ return `<strong>${money(q.price,q.currency,false,gold?2:6)}</strong><span class="${p.percent>0?'pnl-gain':p.percent<0?'pnl-loss':''}">${p.percent.toLocaleString(locale(),{maximumFractionDigits:2,minimumFractionDigits:2,signDisplay:'exceptZero'})}%</span><small>${olderGold?t('最近可用報價')+' · ':''}${new Date(q.asOf).toLocaleString(locale(),{timeZone:'Asia/Hong_Kong',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})} HKT · ${esc(t(q.source))}${q.delayMinutes!=null?` · ${t('延遲')} ${q.delayMinutes} ${t('分鐘')}`:''}${q.session==='closed'?` · ${t('最近收市')}`:''}</small>`;
 }
 function recommendationSyncStatus(){
  const time=recommendationSyncTime(state.recommendationsSync,locale()),request=state.recommendationsSyncRequest;
@@ -130,8 +131,10 @@ function recommendationSyncStatus(){
  return ui`<div class="recommendation-sync" role="status"><div class="recommendation-sync-main"><span>${icon('refresh')} TradingView · 上次成功同步： ${time?`<time datetime="${esc(time.iso)}">${esc(time.display)}</time>`:t('尚未有成功同步紀錄')}</span><button type="button" class="btn small" data-action="sync-recommendations" ${waiting?'disabled':''}>${icon('refresh')}${pending?t(waiting?'等待同步中':'重試同步'):'Sync Now'}</button></div><small>${message?esc(message)+' ':''}${t('需要此 Mac 開機並保持喚醒，TradingView 已登入。背景服務每日自動同步一次（香港時間）；手動請求每 5 分鐘檢查。')} ${state.recommendationsSync?.skippedCount?ui`${state.recommendationsSync.skippedCount} 項推介未匯入，請檢查資產類別、日期及完整價位`:''}</small></div>`;
 }
 function recommendationStopLoss(r){
- const hit=r.stopLossHit;
- return `${r.stopLoss.map(holdingValue).join('<br>')}${hit?`<div class="stop-loss-hit"><span class="stop-loss-badge">${t('已觸及止蝕')}</span><strong>${esc(stopLossHitTime(hit))}</strong><small>${t(stopLossPrecisions[hit.precision])} · ${esc(r.currency)} ${holdingValue(hit.level)}</small><details><summary>${t('核實資料')}</summary><p>${esc(hit.source)}</p>${hit.notes?`<p>${esc(hit.notes)}</p>`:''}</details></div>`:''}`;
+ const {levels,historicalHit}=recommendationStopLevels(r);
+ const priceLabel=price=>`${r.currency==='USD'?'$':esc(r.currency)+' '}${holdingValue(price)}`;
+ const hitDetails=(hit,label='')=>`<div class="stop-loss-hit">${label}<strong>${esc(stopLossHitTime(hit))}</strong><small>${t(stopLossPrecisions[hit.precision])}</small><details><summary>${t('核實資料')}</summary><p>${esc(hit.source)}</p>${hit.notes?`<p>${esc(hit.notes)}</p>`:''}</details></div>`;
+ return `<div class="stop-loss-levels">${levels.map(({price,number,hit})=>`<div class="stop-loss-level"><span>SL${number} <strong>${priceLabel(price)}</strong></span>${hit?`<span class="stop-loss-badge">${t('已觸及')}</span>`:r.stopLossHit?`<span class="stop-loss-badge pending">${t('待觸及')}</span>`:''}</div>${hit?hitDetails(hit):''}`).join('')}${historicalHit?hitDetails(historicalHit,`<span class="stop-loss-badge">${t('歷史止蝕')} · ${priceLabel(historicalHit.level)}</span>`):''}</div>`;
 }
 function stopLossHitFields(r){
  const hit=r.stopLossHit;
@@ -139,7 +142,7 @@ function stopLossHitFields(r){
 }
 function recommendationsView(){
  const list=state.recommendations||[];
- return ui`${pageHeading('ASSET RECOMMENDATIONS',t('資產推介'),t('記錄團隊推介及部署價位，追蹤現價相對 Entry 的表現。'),ui`<button class="btn" data-action="export-recommendations-csv" title="匯出全部資產推介及報價時間">${icon('download')} 匯出 CSV</button><button class="btn" data-action="refresh">${icon('refresh')} 重新整理</button>${state.quotesEnabled?ui`<button class="btn" data-action="refresh-prices">${icon('refresh')} 更新報價</button>`:''}<button class="btn primary" data-action="new-recommendation">${icon('plus')} 新增推介</button>`)}${recommendationSyncStatus()}<section class="panel"><div class="panel-title"><div><h2>團隊資產推介</h2><small>${list.length} ${t('項推介')} · ${t('儲存後全團隊可見')}</small></div><span class="pill">Entry → 現價 %</span></div>${list.length?`<div class="table-wrap"><table class="recommendations-table"><thead><tr><th>${t('資產')}</th><th>${t('推介日期')}</th><th>Entry</th><th>SL</th><th>TP</th><th>${t('現價 / 表現')}</th><th>${t('備註')}</th><th></th></tr></thead><tbody>${list.map(r=>`<tr class="${r.stopLossHit?'recommendation-stopped':''}"><td><strong>${esc(r.symbol)}</strong><small>${esc(securityName(r,state.securityNames))}</small><span class="tier">${esc(t(recommendationMarkets[r.market]))} · ${esc(r.currency)}</span>${r.market==='SpotGold'?`<small>${t(recommendationPriceUnit(r))}</small>`:''}</td><td>${esc(r.recommendDate)}</td><td>${holdingValue(r.entry)}</td><td>${recommendationStopLoss(r)}</td><td>${r.takeProfit.map(holdingValue).join('<br>')}</td><td class="recommendation-price" data-recommendation-price="${esc(r.id)}">${recommendationPrice(r)}</td><td class="recommendation-remarks">${esc(r.remarks)||'—'}</td><td><button class="btn small" data-action="edit-recommendation" data-id="${esc(r.id)}">${t('編輯')}</button></td></tr>`).join('')}</tbody></table></div>`:t('<div class="empty"><h3>尚未新增推介</h3><p>新增資產、Entry、SL、TP 及推介日期，開始記錄。</p></div>')}</section><p class="bottom-note">${t('表現 =（現價 ÷ Entry − 1）× 100%；未計派息及交易費用，不代表實際客戶回報。報價快取 30 分鐘，時間以香港時間顯示。SL／TP 為部署參考；已核實的觸及紀錄另行標示，不代表實際成交。現價表現仍按最新報價計算，不是止蝕成交回報。')}</p>`;
+ return ui`${pageHeading('ASSET RECOMMENDATIONS',t('資產推介'),t('記錄團隊推介及部署價位，追蹤現價相對 Entry 的表現。'),ui`<button class="btn" data-action="export-recommendations-csv" title="匯出全部資產推介及報價時間">${icon('download')} 匯出 CSV</button><button class="btn" data-action="refresh">${icon('refresh')} 重新整理</button>${list.some(quoteEnabledFor)?ui`<button class="btn" data-action="refresh-prices">${icon('refresh')} 更新報價</button>`:''}<button class="btn primary" data-action="new-recommendation">${icon('plus')} 新增推介</button>`)}${recommendationSyncStatus()}<section class="panel"><div class="panel-title"><div><h2>團隊資產推介</h2><small>${list.length} ${t('項推介')} · ${t('儲存後全團隊可見')}</small></div><span class="pill">Entry → 現價 %</span></div>${list.length?`<div class="table-wrap"><table class="recommendations-table"><thead><tr><th>${t('資產')}</th><th>${t('推介日期')}</th><th>Entry</th><th>SL</th><th>TP</th><th>${t('現價 / 表現')}</th><th>${t('備註')}</th><th></th></tr></thead><tbody>${list.map(r=>`<tr class="${r.stopLossHit?'recommendation-stopped':''}"><td><strong>${esc(r.symbol)}</strong><small>${esc(securityName(r,state.securityNames))}</small><span class="tier">${esc(t(recommendationMarkets[r.market]))} · ${esc(r.currency)}</span>${r.market==='SpotGold'?`<small>${t(recommendationPriceUnit(r))}</small>`:''}</td><td>${esc(r.recommendDate)}</td><td>${holdingValue(r.entry)}</td><td>${recommendationStopLoss(r)}</td><td>${r.takeProfit.map(holdingValue).join('<br>')}</td><td class="recommendation-price" data-recommendation-price="${esc(r.id)}">${recommendationPrice(r)}</td><td class="recommendation-remarks">${esc(r.remarks)||'—'}</td><td><button class="btn small" data-action="edit-recommendation" data-id="${esc(r.id)}">${t('編輯')}</button></td></tr>`).join('')}</tbody></table></div>`:t('<div class="empty"><h3>尚未新增推介</h3><p>新增資產、Entry、SL、TP 及推介日期，開始記錄。</p></div>')}</section><p class="bottom-note">${t('表現 =（現價 ÷ Entry − 1）× 100%；未計派息及交易費用，不代表實際客戶回報。報價快取 30 分鐘，時間以香港時間顯示。SL／TP 為部署參考；「待觸及」表示尚未記錄觸及；已觸及紀錄不代表實際成交。現價表現仍按最新報價計算，不是止蝕成交回報。')}</p>`;
 }
 function recommendationModal(id){
  const r=id?state.recommendations.find(r=>r.id===id):{market:'US',symbol:'',name:'',entry:'',stopLoss:[],takeProfit:[],remarks:'',recommendDate:new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Hong_Kong'})};

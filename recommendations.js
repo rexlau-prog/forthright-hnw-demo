@@ -2,6 +2,11 @@ export const recommendationMarkets={US:'美股',HK:'港股',SpotGold:'現貨黃�
 export const recommendationPriceUnit=record=>record.market==='SpotGold'?'美元／金衡盎司':'每股';
 export const stopLossPrecisions={date:'日期',minute:'分鐘', 'minute-bar':'1 分鐘 K 線標記'};
 export function stopLossHitTime(hit){return hit?`${hit.date}${hit.time?' '+hit.time+' HKT':''}`:'';}
+export function recommendationStopLevels(record){
+ const event=record.stopLossHit;
+ const match=event?record.stopLoss.indexOf(event.level):-1;
+ return {levels:record.stopLoss.map((price,index)=>({price,number:index+1,hit:index===match?event:null})),historicalHit:match===-1?event??null:null};
+}
 
 export function validateRecommendation(input){
  const invalid=()=>{throw Object.assign(new Error('推介資料格式不正確，請檢查資產、日期及價位'),{status:400});};

@@ -1,9 +1,10 @@
-import {isFuture,assetPresets,defaultCurrency} from './assets.js?v=6a8604836f2ca897';
+import {isFuture,assetPresets,defaultCurrency} from './assets.js?v=0b51189d82f34cc2';
 // Quote adapters receive symbols only. Client identity, size and cost stay in the browser.
 export function quoteKey(asset) {
   const symbol=String(asset?.symbol??'').trim().toUpperCase();
   if(asset?.market==='HK'&&/^\d{1,5}$/.test(symbol))return `HK:${symbol.padStart(5,'0')}`;
   if(asset?.market==='US'&&/^[A-Z][A-Z0-9.-]{0,19}$/.test(symbol))return `US:${symbol}`;
+  if(asset?.market==='SpotGold'&&symbol==='XAUUSD')return 'SpotGold:XAUUSD';
   if(assetPresets.some(p=>p.market===asset?.market&&p.symbol===symbol)){
     if(asset.market==='Crypto')return `Crypto:${symbol}`;
     if(isFuture(asset)&&/^20\d{2}-(0[1-9]|1[0-2])$/.test(asset.contractMonth??''))return `${asset.market}:${symbol}:${asset.contractMonth}`;
@@ -26,6 +27,7 @@ export function validateQuote(asset,quote,now=Date.now()) {
     ||typeof quote.source!=='string'||!quote.source.trim()||quote.source.length>80)return null;
   if(isFuture(asset)&&(quote.currency!==defaultCurrency(asset.market)||typeof quote.contractMultiplier!=='number'||!Number.isFinite(quote.contractMultiplier)||quote.contractMultiplier<=0))return null;
   if(asset.market==='Crypto'&&quote.currency!=='USD')return null;
+  if(asset.market==='SpotGold'&&(quote.currency!=='USD'||quote.price<=0))return null;
   return {status:'available',price:quote.price,currency:quote.currency,asOf:new Date(timestamp).toISOString(),source:quote.source,
     delayMinutes:Number.isFinite(quote.delayMinutes)&&quote.delayMinutes>=0?quote.delayMinutes:null,
     session:quote.session==='closed'?'closed':null,
