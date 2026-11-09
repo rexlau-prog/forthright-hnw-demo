@@ -1,11 +1,11 @@
-import {markets,isFuture,assetType,defaultCurrency,holdingIdentity,contractLabel} from './assets.js?v=1f9461e7d4275ab0';
-import {validateRecommendation,recommendationPerformance,recommendationSyncTime,recommendationSyncRecovered,recommendationMarkets,recommendationPriceUnit,recommendationStopLevels,stopLossPrecisions,stopLossHitTime} from './recommendations.js?v=1f9461e7d4275ab0';
-import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=1f9461e7d4275ab0';
-import {clientSummaryCsv,clientsCsv,recommendationsCsv} from './export-csv.js?v=1f9461e7d4275ab0';
-import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=1f9461e7d4275ab0';
-import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=1f9461e7d4275ab0';
+import {markets,isFuture,assetType,defaultCurrency,holdingIdentity,contractLabel} from './assets.js?v=dea1e4697bad8bb8';
+import {validateRecommendation,recommendationPerformance,recommendationSyncTime,recommendationSyncRecovered,recommendationMarkets,recommendationPriceUnit,recommendationStopLevels,stopLossPrecisions,stopLossHitTime} from './recommendations.js?v=dea1e4697bad8bb8';
+import {t, ui, language, setLanguage, locale, languageControl, tagLabel, securityName} from './language.js?v=dea1e4697bad8bb8';
+import {clientSummaryCsv,clientsCsv,recommendationsCsv} from './export-csv.js?v=dea1e4697bad8bb8';
+import {createQuoteCache,unrealizedPnl} from './holding-prices.js?v=dea1e4697bad8bb8';
+import {textSizes,textSize,setTextSize,textSizeControl,tagPalette,validTagColor,tagColors} from './preferences.js?v=dea1e4697bad8bb8';
 setTextSize(textSize());
-const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=1f9461e7d4275ab0')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
+const cloudApi = globalThis.FORTHRIGHT_CONFIG ? (await import('./cloud-api.js?v=dea1e4697bad8bb8')).createCloudApi(globalThis.FORTHRIGHT_CONFIG) : null;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon = name => `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${({download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M16 3a4 4 0 0 1 0 8M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',tag:'<path d="M20 13 13 20a2 2 0 0 1-3 0l-8-8V2h10l8 8a2 2 0 0 1 0 3Z"/><circle cx="7" cy="7" r="1"/>',briefcase:'<rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V3h8v4M3 12a22 22 0 0 0 18 0M12 12v3"/>',search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',plus:'<path d="M12 5v14M5 12h14"/>',chevron:'<path d="m9 5 7 7-7 7"/>',lock:'<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>',logout:'<path d="M9 21H3V3h6M9 12h12m-5-5 5 5-5 5"/>',refresh:'<path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-2l2 3M4 16l2 3a7 7 0 0 0 12-2"/>',close:'<path d="m6 6 12 12M6 18 18 6"/>',book:'<path d="M12 5v16M12 5C9 2 5 3 2 4v15c3-1 7-2 10 2 3-4 7-3 10-2V4c-3-1-7-2-10 1Z"/>',check:'<path d="m5 12 4 4L19 6"/>',trash:'<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>'})[name] ?? ''}</svg>`;
@@ -27,6 +27,7 @@ function clearPrivateState(){ quoteCache.clear();Object.assign(state,{user:null,
 const formatDate = d => new Date(d).toLocaleDateString(locale(),{month:'short',day:'numeric'});
 const clientDateFormatter = new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Hong_Kong',year:'numeric',month:'2-digit',day:'2-digit'});
 const tierLabels={'黑鑽':'黑鑽會員','鑽石':'鑽石會員','PWM客戶':'PWM客戶','其他':'其他'};
+const tierBadgeClass={'黑鑽':'black','鑽石':'diamond','PWM客戶':'pwm'};
 const tierOptions=()=>Object.entries(tierLabels).map(([value,label])=>[value,t(label)]);
 const tagHtml = id => { const i=state.tags.findIndex(t=>t.id===id), t=state.tags[i]; return t?`<span class="tag t${i%6}" data-tag-color="${validTagColor(t.color)?t.color:''}">${esc(tagLabel(t.name))}</span>`:''; };
 const options = (items,value) => items.map(([v,label])=>`<option value="${esc(v)}" ${v===value?'selected':''}>${esc(label)}</option>`).join('');
@@ -164,7 +165,7 @@ function clientRows(c){
   return ui`<tr class="client-row ${expanded?'expanded':''}" data-action="toggle-client" data-id="${id}">
     <td><button type="button" class="client-toggle" id="client-toggle-${id}" data-action="toggle-client" data-id="${id}" aria-expanded="${expanded}" aria-controls="client-holdings-${id}" aria-label="${esc(c.surname)} · ${c.last2} · ${t('全部持倉')}"><span class="client-cell"><span class="avatar">${esc(c.surname.slice(0,1))}</span><span><span class="client-name">${esc(c.surname)}</span><span class="client-number">WhatsApp · ${c.last2}</span></span></span></button></td>
     <td class="client-created-date">${Number.isFinite(created)?`<time datetime="${esc(c.createdAt)}">${clientDateFormatter.format(created)}</time>`:'—'}</td>
-    <td><div class="group-name">${esc(c.groupName||t('尚未填寫群組'))}</div><span class="tier ${c.tier==='黑鑽'?'black':''}">${esc(t(c.tier==='其他'?'其他會員':(tierLabels[c.tier] ?? c.tier)))}</span></td>
+    <td><div class="group-name">${esc(c.groupName||t('尚未填寫群組'))}</div><span class="tier ${tierBadgeClass[c.tier] ?? ''}">${esc(t(c.tier==='其他'?'其他會員':(tierLabels[c.tier] ?? c.tier)))}</span></td>
     <td><div class="tags">${c.tags.map(tagHtml).join('')||t('<small>尚未標記</small>')}</div></td>
     <td><div class="symbols">${c.holdings.slice(0,3).map(h=>`<span class="symbol">${h.market==='HK'?'HK · ':''}${esc(h.symbol)}${h.market==='HK'?' · '+esc(securityName(h,state.securityNames)):''}</span>`).join('')}${c.holdings.length>3?`<span class="symbol">+${c.holdings.length-3}</span>`:''}${!c.holdings.length?t('<small>尚未記錄</small>'):''}</div><small class="client-holdings-hint">${expanded?t('點選收起'):t('點選展開全部持倉')}</small></td>
     <td><div class="updated">${formatDate(c.updatedAt)}<br>${esc(c.updatedBy)}</div></td><td><span class="client-expand-icon" aria-hidden="true">${icon('chevron')}</span></td>

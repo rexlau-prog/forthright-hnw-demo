@@ -1,6 +1,6 @@
 // Browser-safe credentials only. Sessions and client records stay in memory.
 // No localStorage, sessionStorage, IndexedDB, or service-worker cache.
-import {withAssetPresets} from './assets.js?v=1f9461e7d4275ab0';
+import {withAssetPresets} from './assets.js?v=dea1e4697bad8bb8';
 
 export function createCloudApi(config, fetcher = fetch) {
   const base = config.url.replace(/\/$/, '');

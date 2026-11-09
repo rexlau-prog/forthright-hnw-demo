@@ -1,7 +1,7 @@
-import {markets,contractLabel} from './assets.js?v=1f9461e7d4275ab0';
-import {t,tagLabel,securityName} from './language.js?v=1f9461e7d4275ab0';
-import {unrealizedPnl} from './holding-prices.js?v=1f9461e7d4275ab0';
-import {recommendationPerformance,recommendationMarkets,recommendationPriceUnit,stopLossPrecisions} from './recommendations.js?v=1f9461e7d4275ab0';
+import {markets,contractLabel} from './assets.js?v=dea1e4697bad8bb8';
+import {t,tagLabel,securityName} from './language.js?v=dea1e4697bad8bb8';
+import {unrealizedPnl} from './holding-prices.js?v=dea1e4697bad8bb8';
+import {recommendationPerformance,recommendationMarkets,recommendationPriceUnit,stopLossPrecisions} from './recommendations.js?v=dea1e4697bad8bb8';
 
 // Quote every field, preserve multiline notes, and prevent spreadsheet formula execution.
 export function csvCell(value, preserveZeroes=false){
